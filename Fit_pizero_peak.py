@@ -23,7 +23,8 @@ import yaml
 gROOT.SetBatch(True)
 EnableImplicitMT()
 
-################# SETTING #########################################       
+################# SETTING #########################################
+dataBlock_dict = {5 : ["data_24c3a_magup_qee", "magup", "2024", "FillNumber >= 10059 && FillNumber <= 10102"]}       
 
 track_type   = "Prompt" # Prompt or Displaced
 samesign = False
@@ -38,7 +39,7 @@ filenbr = 335
 ################# SELECTION #########################################       
 
 
-def get_selection(sel, fd_tag, string):
+def get_selection(sel, fd_tag, string, fillnbr = None):
     print("Get selection for", fd_tag, " : ", sel)
     selBremOverlap = "!(em_HASBREMADDED==1 && gamma_CaloNeutralID==em_BREMHYPOID ) && !(ep_HASBREMADDED==1 && gamma_CaloNeutralID==ep_BREMHYPOID)"
     selEcal = "!(gamma_CaloNeutralCol > 22 && gamma_CaloNeutralCol < 41 && gamma_CaloNeutralRow > 24 && gamma_CaloNeutralRow < 39)"
@@ -48,6 +49,9 @@ def get_selection(sel, fd_tag, string):
     selTopo = "em_QOVERP>-0.3 && ep_QOVERP<0.3 && ep_CHI2_DOF<2 && em_CHI2_DOF<2"
 
     selList = []
+    if fillnbr != None:
+        selList.append(fillnbr)
+    
     if "truM" in sel:
         if "minBias" not in string:
             # pi0 peak in minBias visible for 10, 50 and 60                     
@@ -84,38 +88,43 @@ def get_selection(sel, fd_tag, string):
         selList.append(selTopo)
 
     selString = ' && '.join(selList)
+    print(f"selString: {selString}")
     return selString
 
     
 ################# FUNCTIONS #########################################       
 
-def get_pfns(data_type):
+def get_pfns(data_type, data_name=None, data_polarity=None, data_year=None):
     from apd import AnalysisData
 
     datasets = AnalysisData("qee", "pi02eegamma_r3")
 
     if data_type == "Data":
-        return datasets(polarity="magup", eventtype="94000000",
-                        datatype="2024", filetype="qee_funtuple.root",
-                        name="data_24c3a_magup_qee")
+        return datasets(polarity=data_polarity, eventtype="94000000",
+                        datatype=data_year, filetype="qee_funtuple.root",
+                        name=data_name)
     
     return datasets(polarity="magup", eventtype="39122948",
                     version="v1r2683",
                     datatype="2024", filetype="funtuple_qee.root",
                     name="mcblock12_magup_pi0_dalitz_turbo_ftuple")
 
-def setup_files(data_type, track_type, sel="", samesign=False, filenbr=1):
+def setup_files(data_type, track_type, sel="", samesign=False, filenbr=1,
+data_name = None, data_polarity = None, data_year = None, output_dir = None):
 
 
     
     ofilename = f"{data_type}_{track_type}"+"_SS"*samesign+".root"
+
+    if output_dir and data_type == "Data" :
+        ofilename = os.path.join(output_dir, ofilename)
 
     if os.path.exists(ofilename):
         return ofilename
 
 
     print(f"Merging files into {ofilename}")
-    ifilenames = get_pfns(data_type=data_type)
+    ifilenames = get_pfns(data_type=data_type, data_name= data_name, data_polarity=data_polarity, data_year=data_year)
     if data_type == "Data" and not samesign:
         ifilenames = ifilenames[:2]
     treename = f"Rho_Tuple_{track_type}"
@@ -141,7 +150,7 @@ def setup_files(data_type, track_type, sel="", samesign=False, filenbr=1):
     return ofilename
 
 
-def fit_data(mcfilename, datafilename, track_type, samesign=False):
+def fit_data(mcfilename, datafilename, track_type, samesign=False, output_dir=None):
     mctreename = "DecayTree"
 
     mcfile = TFile(mcfilename)
@@ -266,38 +275,20 @@ def fit_data(mcfilename, datafilename, track_type, samesign=False):
                  RooFit.Name("model"),
                  RooFit.LineColor(kViolet+4))
 
-    
-    '''
-    cmdListS = RooLinkedList()
-    cmdListS.Add(RooFit.Components("sigmodel"))
-    #cmdListS.Add(RooFit.Name("sigmodel"))
-    cmdListS.Add(RooFit.LineStyle(kDashed))
-    cmdListS.Add(RooFit.LineColor(kRed+2))
-    '''
+
     
     model.plotOn(frame2, 
                  RooFit.Components("sigmodel"),
                  RooFit.Name("sigmodel"),
                  RooFit.LineColor(kRed+2),
                  RooFit.LineStyle(kDashed))
-    '''
-    cmdListB = RooLinkedList()
-    cmdListB.Add(RooFit.Components("bkgmodel"))
-    #cmdListS.Add(RooFit.Name("sigmodel"))
-    cmdListB.Add(RooFit.LineStyle(kDashed))
-    cmdListB.Add(RooFit.LineColor(kGreen+2))
-    '''          
+
     model.plotOn(frame2,
                  RooFit.Components("bkgmodel"),
                  RooFit.Name("bkgmodel"),
                  RooFit.LineColor(kBlue+2),
                  RooFit.LineStyle(kDashed))
-    '''
-    cmdList = RooLinkedList()
-    cmdList.Add(RooFit.LineColor(kViolet+2))
 
-    print(type(cmdList))
-    '''
     frame2.Draw()
 
     ### Add a legend
@@ -312,6 +303,8 @@ def fit_data(mcfilename, datafilename, track_type, samesign=False):
     
     c2.Update()
     figurename = f"DataFit_{fd_tag}.pdf"
+    if output_dir: 
+        figurename = os.path.join(output_dir, figurename)
     c2.SaveAs(figurename)
     print("Save figure : ", figurename)
     c2.Close()
@@ -341,6 +334,8 @@ def fit_data(mcfilename, datafilename, track_type, samesign=False):
     
     # Save result dictionnary into a yaml file
     yfile = "FitResults.yml"
+    if output_dir: 
+        yfile = os.path.join(output_dir, yfile)
     with open(yfile, 'w') as outfile:
         yaml.dump(d, outfile, default_flow_style=False)
         print("\nSaved yml file in: ", yfile)
@@ -363,21 +358,32 @@ if __name__ == "__main__":
 
     print(mcfilename)
 
-    print("\n>> Get selection for data file")
-    datasel = get_selection(selstring, fd_tag, "")
 
-    print("Combine files in one data sample")
-    datafilename = setup_files(data_type="Data", track_type=track_type,
-                               sel=datasel, samesign=samesign, filenbr=filenbr)
-    print(datafilename)
-    
-    print("\n>> Start fitting")
-    n1 = fit_data(mcfilename=mcfilename, datafilename=datafilename,
-                  track_type=track_type, samesign=samesign)
+    for dataBlock in dataBlock_dict.keys():
+        print("\n >> Start with data block", dataBlock)
+        data_string, data_polarity, data_year, fillnbr_selection  = dataBlock_dict[dataBlock]
+        print(f"name: {data_string}, polarity: {data_polarity}, year: {data_year}, fill number: {fillnbr_selection}")
+
+        block_dir = f"block_{data_string}"
+        if not os.path.exists(block_dir):
+            os.mkdir(block_dir)
+
+        print("\n>> Get selection for data file")
+        datasel = get_selection(selstring, fd_tag, "", fillnbr = fillnbr_selection )
+
+        print("Combine files in one data sample")
+        datafilename = setup_files(data_type="Data", track_type=track_type,
+                                sel=datasel, samesign=samesign, filenbr=filenbr,
+                                data_name = data_string, data_polarity = data_polarity, data_year = data_year, output_dir=block_dir)
+        print(datafilename)
+        
+        print("\n>> Start fitting")
+        n1 = fit_data(mcfilename=mcfilename, datafilename=datafilename,
+                    track_type=track_type, samesign=samesign,output_dir=block_dir)
+
+        print(f">> BLOCK {dataBlock} DONE")
+
 
     print(">> DONE")
 
 ## EOF
-
-
-    
