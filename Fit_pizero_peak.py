@@ -16,15 +16,32 @@
 ################# IMPORT ############################################       
 import os, sys
 import argparse
-from ROOT import RDataFrame, RDF, TLegend, TCanvas, TFile, TChain, RooRealVar, RooArgList, RooArgSet, RooGaussian, RooCBShape, RooLinkedList, RooArgusBG, RooAddPdf, RooFit, RooDataSet, RooCrystalBall, RooGenericPdf, gROOT, EnableImplicitMT, kRed, kGreen, kViolet, kBlue, kDashed
+from ROOT import RDataFrame, RDF, TLegend, TCanvas, TFile, TChain, RooRealVar, RooArgList, RooArgSet, RooGaussian, RooCBShape, RooLinkedList, RooArgusBG, RooAddPdf, RooFit, RooDataSet, RooCrystalBall, RooGenericPdf, gROOT, EnableImplicitMT, kRed, kGreen, kViolet, kBlue, kDashed, TPaveText, gStyle
 import pickle
 import yaml
 
 gROOT.SetBatch(True)
 EnableImplicitMT()
+#PLOTTING
+gROOT.ProcessLine(".x lhcbStyle.C")
+print("--> LHCbStyle loaded")
+
 
 ################# SETTING #########################################
-dataBlock_dict = {5 : ["data_24c3a_magup_qee", "magup", "2024", "FillNumber >= 10059 && FillNumber <= 10102"]}       
+
+
+dataBlock_dict = {4: ["data_24c2a_magdown_qee", "magdown", "2024", "FillNumber >= 9808 && FillNumber <= 9910" ],
+                  3 : ["data_24c2a_magup_qee", "magup", "2024", "FillNumber >= 9911 && FillNumber <= 9943" ],
+                  2 : ["data_24c2a_magup_qee", "magup", "2024", "FillNumber >= 9945 && FillNumber <= 9978" ],
+                  1 : ["data_24c2a_magup_qee", "magup", "2024", "FillNumber >= 9982 && FillNumber <= 10056" ],
+                  5 : ["data_24c3a_magup_qee", "magup", "2024", "FillNumber >= 10059 && FillNumber <= 10102"],
+                  6: ["data_24c3a_magdown_qee", "magdown", "2024", "FillNumber >= 10104 && FillNumber <= 10190" ],
+                  7: ["data_24c4a_magdown_qee", "magdown", "2024", "FillNumber >= 10197 && FillNumber <= 10213" ],
+                  8 : ["data_24c4a_magup_qee", "magup", "2024", "FillNumber >= 10214 && FillNumber <= 10232" ],
+                  9: ["data_25c1_magdown_qee", "magdown", "2025", "FillNumber >= 10489 && FillNumber <= 10732" ]
+}       
+
+
 
 track_type   = "Prompt" # Prompt or Displaced
 samesign = False
@@ -34,12 +51,12 @@ if samesign == True:
     
 mcfile = "Dalitz" # 3-body decay of pi0, as in SM. 
 selstring = "hlt1_BremOverlap_Ecal_PID_Kin_Rho_Topo"
-filenbr = 335
+filenbr = -1 
 
 ################# SELECTION #########################################       
 
 
-def get_selection(sel, fd_tag, string, fillnbr = None):
+def get_selection(sel, fd_tag, string, fillnbr = None, data_year = None):
     print("Get selection for", fd_tag, " : ", sel)
     selBremOverlap = "!(em_HASBREMADDED==1 && gamma_CaloNeutralID==em_BREMHYPOID ) && !(ep_HASBREMADDED==1 && gamma_CaloNeutralID==ep_BREMHYPOID)"
     selEcal = "!(gamma_CaloNeutralCol > 22 && gamma_CaloNeutralCol < 41 && gamma_CaloNeutralRow > 24 && gamma_CaloNeutralRow < 39)"
@@ -61,19 +78,26 @@ def get_selection(sel, fd_tag, string, fillnbr = None):
             truM ="(rho_BKGCAT != 10 && rho_BKGCAT != 50)"
         selList.append(truM)
     if "hlt1" in sel:
+
         dec = "displacedDecision"
         if fd_tag == "Prompt" or fd_tag == "PromptSS":
             dec = "promptDecision"
+            if data_year == "2025":
+                dec = "NoIPDecision"
         ss = ""
         if "SS" in fd_tag:
             ss = "_SS"
 
-        lines = []
-        for i in range(1, 5):
-            lines.append(f"KS0_Hlt1DiElectronLowMass{ss}_massSlice{i}_{dec}_TOS")
+        if data_year != "2025":
+            lines = []
+            for i in range(1, 5):
+                lines.append(f"KS0_Hlt1DiElectronLowMass{ss}_massSlice{i}_{dec}_TOS")
+        else:
+            lines = [f"KS0_Hlt1DiElectronLowMass{ss}_{dec}_TOS"]
 
         hlt1sel = ' || '.join(lines)
         selList.append(f"( {hlt1sel} )")
+        
     if "BremOverlap" in sel:
         selList.append(selBremOverlap)
     if "Ecal" in sel:
@@ -127,14 +151,19 @@ data_name = None, data_polarity = None, data_year = None, output_dir = None):
     ifilenames = get_pfns(data_type=data_type, data_name= data_name, data_polarity=data_polarity, data_year=data_year)
     if data_type == "Data" and not samesign:
         ifilenames = ifilenames[:2]
-    treename = f"Rho_Tuple_{track_type}"
+    if data_year == "2025":
+        treename = "Rho_Tuple_NoIP"
+    else:
+        treename = f"Rho_Tuple_{track_type}"
     if samesign: treename += "SS"
     treename += "/DecayTree"
     
     chain = TChain(treename)
     i = 0
     for ifilename in ifilenames:
-        if i<filenbr:
+        if filenbr==-1:
+            chain.Add(ifilename)
+        elif i<filenbr:
             chain.Add(ifilename)
         else:
             break
@@ -165,15 +194,16 @@ def fit_data(mcfilename, datafilename, track_type, samesign=False, output_dir=No
     ### Create the fit model
     a1 = RooRealVar("a1", "a1", 1.18, 0.1, 100)
     a2 = RooRealVar("a2", "a2", 1.46, 0.1, 100)
-    n1 = RooRealVar("n1", "n1", 25, 0.1, 200)
+    n1 = RooRealVar("n1", "n1", 1.2, 0.1, 25)
     n2 = RooRealVar("n2", "n2", 1.22, 0.1, 100)
 
     mean = RooRealVar("mean", "mean", 135, 10, 155)
 
     sigma = RooRealVar("sigma", "sigma", 14, 1, 100)
 
-    sigmodel = RooCrystalBall("sigmodel", "sigmodel", massvar, mean,
-                              sigma, a1, n1, a2, n2)
+    sigmodel = RooCrystalBall("sigmodel", "sigmodel", massvar, mean, sigma, a1, n1, a2, n2)
+    #sigmodel = RooCrystalBall("sigmodel", "sigmodel", massvar, mean, sigma, a1, n1, doubleSided=False)
+
 
     # Fit options we can think about later
     #mean_constr = RooGaussian("mean_constr", "mean_constr", mean,
@@ -197,20 +227,42 @@ def fit_data(mcfilename, datafilename, track_type, samesign=False, output_dir=No
     d["n1_unc"] = n1.getError()
     d["n2"] = n2.getVal()
     d["n2_unc"] = n2.getError()
+    d["MCfit_status"] = mcresult.status()
+
     
     ### Plotting
-    gROOT.ProcessLine(".x lhcbStyle.C")
-    print("--> LHCbStyle loaded")
-    #from ROOT import lhcbName, lhcbLabel, lhcbLatex
+    #gROOT.ProcessLine(".x lhcbStyle.C")
+    #print("--> LHCbStyle loaded")
+    
 
     c1 = TCanvas("c1", "c1", 800, 600)
     frame = massvar.frame()
     mcdata.plotOn(frame, RooFit.Binning(100))
     sigmodel.plotOn(frame)
 
+    maxi=frame.GetMaximum()
+    frame.SetMaximum(maxi*1.2) 
+
     frame.SetXTitle("m(e^{+}e^{-}#gamma) [MeV/c^{2}]")
+    bin_width = (massvar.getMax() - massvar.getMin()) / 100
+    frame.SetYTitle(f"Candidates / ({bin_width:.1f} MeV/c^{{2}})")
     
     frame.Draw()
+
+    lhcbName = TPaveText(gStyle.GetPadLeftMargin() + 0.03,
+                         0.87 - gStyle.GetPadTopMargin(),
+                         gStyle.GetPadLeftMargin() + 0.38,
+                         0.95 - gStyle.GetPadTopMargin(),
+                         "BRNDC")
+    
+    lhcbName.AddText("LHCb Simulation")
+    
+    lhcbName.SetFillColor(0)
+    lhcbName.SetFillStyle(0)
+    lhcbName.SetTextAlign(12)
+    lhcbName.SetTextSize(0.06)
+    lhcbName.SetBorderSize(0)
+    lhcbName.Draw()
 
     c1.Update()
     plotofmcfit = f"MCfit_{fd_tag}.pdf"
@@ -248,7 +300,7 @@ def fit_data(mcfilename, datafilename, track_type, samesign=False, output_dir=No
                              q2_expr, RooArgList(massvar, mA, mB))
 
     nsig = RooRealVar("nsig", "nsig", 1, data.numEntries())
-    nbkg = RooRealVar("nbkg", "nbkg", 100000, data.numEntries())
+    nbkg = RooRealVar("nbkg", "nbkg", 1, data.numEntries())
 
     model = RooAddPdf("model", "model", RooArgSet(sigmodel, bkgmodel),
                       RooArgSet(nsig, nbkg))
@@ -299,7 +351,26 @@ def fit_data(mcfilename, datafilename, track_type, samesign=False, output_dir=No
     leg.AddEntry(frame2.findObject("bkgmodel"), "Background", "l")
     leg.Draw()
 
+    maxi2=frame2.GetMaximum()
+    frame2.SetMaximum(maxi2*1.2) 
+
     frame2.SetXTitle("m(e^{+}e^{-}#gamma) [MeV/c^{2}]")
+    frame2.SetYTitle(f"Candidates / ({bin_width:.1f} MeV/c^{{2}})")
+
+    lhcbName2 = TPaveText(gStyle.GetPadLeftMargin() + 0.03,
+                         0.87 - gStyle.GetPadTopMargin(),
+                         gStyle.GetPadLeftMargin() + 0.38,
+                         0.95 - gStyle.GetPadTopMargin(),
+                         "BRNDC")
+    
+    lhcbName2.AddText("LHCb Preliminary")
+    
+    lhcbName2.SetFillColor(0)
+    lhcbName2.SetFillStyle(0)
+    lhcbName2.SetTextAlign(12)
+    lhcbName2.SetTextSize(0.06)
+    lhcbName2.SetBorderSize(0)
+    lhcbName2.Draw()
     
     c2.Update()
     figurename = f"DataFit_{fd_tag}.pdf"
@@ -330,6 +401,7 @@ def fit_data(mcfilename, datafilename, track_type, samesign=False, output_dir=No
     d["mB_unc"] = mB.getError()
     d["Nbkg"] = nbkg.getVal()
     d["Nbkg_unc"] = nbkg.getError()
+    d["DataFit_status"] = result.status()
 
     
     # Save result dictionnary into a yaml file
@@ -354,7 +426,7 @@ if __name__ == "__main__":
 
     print("Combine files in one MC sample")
     mcfilename = setup_files(data_type="MC", track_type=track_type,
-                             sel=mcsel, samesign=samesign, filenbr=filenbr)
+                             sel=mcsel, samesign=samesign, filenbr=1)
 
     print(mcfilename)
 
@@ -364,12 +436,20 @@ if __name__ == "__main__":
         data_string, data_polarity, data_year, fillnbr_selection  = dataBlock_dict[dataBlock]
         print(f"name: {data_string}, polarity: {data_polarity}, year: {data_year}, fill number: {fillnbr_selection}")
 
-        block_dir = f"block_{data_string}"
-        if not os.path.exists(block_dir):
-            os.mkdir(block_dir)
+        block_dir = f"block_{dataBlock}"
+
+        expected_files = [f"{block_dir}/DataFit_{fd_tag}.pdf",
+                        f"{block_dir}/FitResults.yml"]
+
+        if os.path.exists(block_dir) and all(os.path.exists(f) for f in expected_files):
+            print(f">> Skipping block {dataBlock}: already processed.")
+            continue
+        else:
+            if not os.path.exists(block_dir):
+                os.mkdir(block_dir)
 
         print("\n>> Get selection for data file")
-        datasel = get_selection(selstring, fd_tag, "", fillnbr = fillnbr_selection )
+        datasel = get_selection(selstring, fd_tag, "", fillnbr= fillnbr_selection, data_year=data_year)
 
         print("Combine files in one data sample")
         datafilename = setup_files(data_type="Data", track_type=track_type,
@@ -378,7 +458,7 @@ if __name__ == "__main__":
         print(datafilename)
         
         print("\n>> Start fitting")
-        n1 = fit_data(mcfilename=mcfilename, datafilename=datafilename,
+        fit_ok = fit_data(mcfilename=mcfilename, datafilename=datafilename,
                     track_type=track_type, samesign=samesign,output_dir=block_dir)
 
         print(f">> BLOCK {dataBlock} DONE")
