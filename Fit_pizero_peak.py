@@ -16,9 +16,12 @@
 ################# IMPORT ############################################       
 import os, sys
 import argparse
-from ROOT import RDataFrame, RDF, TLegend, TCanvas, TFile, TChain, RooRealVar, RooArgList, RooArgSet, RooGaussian, RooCBShape, RooLinkedList, RooArgusBG, RooAddPdf, RooFit, RooDataSet, RooCrystalBall, RooGenericPdf, gROOT, EnableImplicitMT, kRed, kGreen, kViolet, kBlue, kDashed, TPaveText, gStyle
+from ROOT import  TLine, RooBernstein, RooBukinPdf, RooNovosibirsk, RooChebychev, RDataFrame, RDF, TLegend, TCanvas, TFile, TChain, RooRealVar, RooArgList, RooArgSet, RooGaussian, RooCBShape, RooLinkedList, RooArgusBG, RooAddPdf, RooFit, RooDataSet, RooCrystalBall, RooGenericPdf, gROOT, EnableImplicitMT, kRed, kGreen, kViolet, kBlue, kDashed, TPaveText, gStyle
 import pickle
 import yaml
+from datetime import datetime
+import uproot
+import numpy as np
 
 gROOT.SetBatch(True)
 EnableImplicitMT()
@@ -51,7 +54,7 @@ if samesign == True:
     
 mcfile = "Dalitz" # 3-body decay of pi0, as in SM. 
 selstring = "hlt1_BremOverlap_Ecal_PID_Kin_Rho_Topo"
-filenbr = -1 
+filenbr = -1
 
 ################# SELECTION #########################################       
 
@@ -179,35 +182,65 @@ data_name = None, data_polarity = None, data_year = None, output_dir = None):
     return ofilename
 
 
-def fit_data(mcfilename, datafilename, track_type, samesign=False, output_dir=None):
+def fit_data(mcfilename, datafilename, track_type, samesign=False, output_dir=None, luminosity=1, luminosity_uncertainty=0):
     mctreename = "DecayTree"
 
     mcfile = TFile(mcfilename)
     mctree = mcfile.Get(mctreename)
 
-    massvar = RooRealVar("rho_M", "rho_M", 50, 400)#50, 250)
+    massvar = RooRealVar("rho_M", "rho_M", 50, 400) #50, 400 #70,400/500
     listvars = RooArgSet(massvar)
 
     mcdata = RooDataSet("mcdata", "mcdata", listvars, RooFit.Import(mctree))
     print("MC data has", mcdata.sumEntries(), "entries")
     
     ### Create the fit model
-    a1 = RooRealVar("a1", "a1", 1.18, 0.1, 100)
-    a2 = RooRealVar("a2", "a2", 1.46, 0.1, 100)
-    n1 = RooRealVar("n1", "n1", 1.2, 0.1, 25)
-    n2 = RooRealVar("n2", "n2", 1.22, 0.1, 100)
+    #a1 = RooRealVar("a1", "a1", 1.1, 0.1, 5)
+    #a2 = RooRealVar("a2", "a2", 1.45, 0.1, 5)
+    #n1 = RooRealVar("n1", "n1", 144, 100, 200)
+    #n2 = RooRealVar("n2", "n2", 1.22, 0.1, 10)
 
-    mean = RooRealVar("mean", "mean", 135, 10, 155)
+    #mean = RooRealVar("mean", "mean", 130, 120, 155)
 
-    sigma = RooRealVar("sigma", "sigma", 14, 1, 100)
+    #sigma = RooRealVar("sigma", "sigma", 15.38, 2, 20)
 
-    sigmodel = RooCrystalBall("sigmodel", "sigmodel", massvar, mean, sigma, a1, n1, a2, n2)
-    #sigmodel = RooCrystalBall("sigmodel", "sigmodel", massvar, mean, sigma, a1, n1, doubleSided=False)
+    #sigmodel = RooCrystalBall("sigmodel", "sigmodel", massvar, mean, sigma, a1, n1, a2, n2)
 
+    a = RooRealVar("alpha", "alpha", -1.60, -2, 2)
+    n  = RooRealVar("n", "n", 1.12, 0.1, 2) 
+    sigma = RooRealVar("sigma", "sigma", 18.22, 2, 20)
+    mean  = RooRealVar("mean", "mean", 130, 120, 140)
+   
+    sigmodel = RooCrystalBall("sigmodel", "sigmodel", massvar, mean, sigma, a, n, False)
 
     # Fit options we can think about later
     #mean_constr = RooGaussian("mean_constr", "mean_constr", mean,
     #                             RooFit.RooConst(135), RooFit.RooConst(5))
+
+
+
+   #mean = RooRealVar("mean", "mean", 135, 120, 150)    
+   #sigma = RooRealVar("sigma", "sigma", 10, 0.1, 100)             
+   #tau = RooRealVar("tau", "tau", 1, -10.0, 10.0) 
+
+   #sigmodel = RooNovosibirsk("novosibirsk", "Novosibirsk Function", massvar, mean, sigma, tau)  
+
+
+    # Parámetros del Bukin PDF
+    #mean = RooRealVar("mean", "mean", 130, 120, 155)         
+    #sigma = RooRealVar("sigma", "sigma", 15.38, 2, 20)                
+    #xi = RooRealVar("xi", "xi", -0.1, -2, 0)                
+    #rhoL = RooRealVar("rhoL", "rhoL", 0.1, 0.001, 1.0)          
+    #rhoR = RooRealVar("rhoR", "rhoR", 0.1, 0.001, 1.0)          
+
+    # Definir modelo de señal con Bukin
+    #sigmodel = RooBukinPdf("sigmodel", "sigmodel", massvar, mean, sigma, xi, rhoL, rhoR)
+
+
+
+
+
+
 
     ### Create the fit of the model to the mc
     print("\n> Fit MC sample")
@@ -217,37 +250,80 @@ def fit_data(mcfilename, datafilename, track_type, samesign=False, output_dir=No
 
     mcresult.Print()
 
+    #chi2_MC = mcresult.chi2()
+    #print(f"Chi2 from MC fit: {chi2_MC:.2f}")
+    
+
     ### Save result from above in a dictionnary
     d = {}
-    d["a1"] = a1.getVal()
-    d["a1_unc"] = a1.getError()
-    d["a2"] = a2.getVal()
-    d["a2_unc"] = a2.getError()
-    d["n1"] = n1.getVal()
-    d["n1_unc"] = n1.getError()
-    d["n2"] = n2.getVal()
-    d["n2_unc"] = n2.getError()
+    #d["a1"] = a1.getVal()
+    #d["a1_unc"] = a1.getError()
+    #d["a2"] = a2.getVal()
+    #d["a2_unc"] = a2.getError()
+    #d["n1"] = n1.getVal()
+    #d["n1_unc"] = n1.getError()
+    #d["n2"] = n2.getVal()
+    #d["n2_unc"] = n2.getError()
+    d["a"]=a.getVal()
+    d["a_unc"] = a.getError()
+    d["n"]=n.getVal()
+    d["n_unc"] = n.getError()
     d["MCfit_status"] = mcresult.status()
+    #d["chi2_MC"] = chi2_MC
+    #d["Tau"] = tau.getVal()
+    #d["Tau_unc"] = tau.getError()
+    #d["xi"] = xi.getVal()
+    #d["xi_unc"] = xi.getError()
+    #d["rhoL"] = rhoL.getVal()
+    #d["rhoL_unc"] = rhoL.getError()
+    #d["rhoR"] = rhoR.getVal()
+    #d["rhoR_unc"] = rhoR.getError()
 
     
     ### Plotting
     #gROOT.ProcessLine(".x lhcbStyle.C")
     #print("--> LHCbStyle loaded")
     
+    num_bins = 100
 
     c1 = TCanvas("c1", "c1", 800, 600)
-    frame = massvar.frame()
-    mcdata.plotOn(frame, RooFit.Binning(100))
+    frame = massvar.frame(RooFit.Binning(num_bins))
+    mcdata.plotOn(frame, RooFit.Binning(num_bins))
     sigmodel.plotOn(frame)
+
+    paramMC = sigmodel.getParameters(mcdata)
+    for param in paramMC:
+        print(f"{param.GetName()} (constant: {param.isConstant()})")
+    numParamMC = sum(1 for p in paramMC if not p.isConstant())
+    print(f"Number of free parameters: {numParamMC}")
+    chi2_mc = frame.chiSquare(numParamMC)
+    print(f"Chi2/NDF (MC) = {chi2_mc:.2f}")
+    d["chi2_ndf_MC"] = chi2_mc
+
+
 
     maxi=frame.GetMaximum()
     frame.SetMaximum(maxi*1.2) 
 
     frame.SetXTitle("m(e^{+}e^{-}#gamma) [MeV/c^{2}]")
-    bin_width = (massvar.getMax() - massvar.getMin()) / 100
+    bin_width = (massvar.getMax() - massvar.getMin()) / num_bins
     frame.SetYTitle(f"Candidates / ({bin_width:.1f} MeV/c^{{2}})")
     
     frame.Draw()
+
+    # Línea vertical del valor teórico
+    Pi0_mass = 134.9768  # MeV/c^2
+    line = TLine(Pi0_mass, 0, Pi0_mass, maxi * 1.2)
+    line.SetLineColor(kGreen + 2)
+    line.SetLineWidth(2)
+    line.SetLineStyle(2)
+    line.Draw()
+
+    # Leyenda
+    #leg = TLegend(0.65, 0.75, 0.90, 0.88)  # Ajusta según espacio disponible
+    #leg.SetTextSize(0.05)
+    #leg.AddEntry(line, "PDG m(#pi^{{0}})", "l")
+    #leg.Draw()
 
     lhcbName = TPaveText(gStyle.GetPadLeftMargin() + 0.03,
                          0.87 - gStyle.GetPadTopMargin(),
@@ -267,6 +343,10 @@ def fit_data(mcfilename, datafilename, track_type, samesign=False, output_dir=No
     c1.Update()
     plotofmcfit = f"MCfit_{fd_tag}.pdf"
     c1.SaveAs(plotofmcfit)
+
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    c1.SaveAs(f"tests/MCFit_{fd_tag}_{timestamp}.pdf")
+
     c1.Close()
     print("Saved figure : ", plotofmcfit)
 
@@ -284,20 +364,36 @@ def fit_data(mcfilename, datafilename, track_type, samesign=False, output_dir=No
     
     ### Create total model of signal + background
     # Set shape parameter of the signal shape to the MC parameter from the previsous fit
-    for var in [a1, n1, a2, n2]:
+
+    #for var in [a1, n1, a2, n2]:
+    for var in [a, n]:
+    #for var in [xi,rhoL,rhoR]:
         var.setConstant(True)
         var.Print()
+
+    
         
     #m0 = RooRealVar("m0", "m0", 1000, 581, 10000)
     #c  = RooRealVar("c", "c", -20, -100, -1)
 
     #bkgmodel = RooArgusBG("bkgmodel", "bkgmodel", massvar, m0, c)
-    #q2_expr = "TMath:Sqrt( (rho_M*rho_M - (mA + mB)*(mA + mB)) * (rho_M*rho_M - (mA - mB)*(mA - mB)) ) / (2*rho_M)"
-    q2_expr = "(rho_M-50)**A * exp(-B*(rho_M-50))"
-    mA = RooRealVar("A", "A", 0.5, 1e-3, 75)
-    mB = RooRealVar("B", "B", 1e-6, 1e-2)
-    bkgmodel = RooGenericPdf("bkgmodel", "bkgmodel",
-                             q2_expr, RooArgList(massvar, mA, mB))
+
+    #q2_expr = "TMath:Sqrt( (rho_M*rho_M - (mA + mB)*(mA + mB)) * (rho_M*rho_M - (f- mB)*(mA - mB)) ) / (2*rho_M)"
+
+
+    #q2_expr = "(rho_M-50)**A * exp(-B*(rho_M-50))"
+    #mA = RooRealVar("A", "A", 0.5, 1e-3, 75)
+    #mB = RooRealVar("B", "B", 1e-6, 1e-2)
+    #bkgmodel = RooGenericPdf("bkgmodel", "bkgmodel", q2_expr, RooArgList(massvar, mA, mB))
+
+    ch0 = RooRealVar("ch0", "ch0", 0.8, -100.0, 100.0)
+    ch1 = RooRealVar("ch1", "ch1", 0.8, -100.0, 100.0)
+    #ch2 = RooRealVar("ch2", "ch2", 0.8, -100.0, 100.0)
+    
+
+    bkgmodel = RooChebychev("bkgmodel", "bkgmodel", massvar, RooArgList(ch0, ch1))
+
+    #bkgmodel = RooBernstein("bkgmodel", "bkgmodel", massvar, RooArgList(ch0, ch1, ch2))
 
     nsig = RooRealVar("nsig", "nsig", 1, data.numEntries())
     nbkg = RooRealVar("nbkg", "nbkg", 1, data.numEntries())
@@ -312,15 +408,19 @@ def fit_data(mcfilename, datafilename, track_type, samesign=False, output_dir=No
     #RooFit.ExternalConstraints(rt.RooArgSet(mean_constr)))
 
     result.Print()
+
+    #chi2_Data = result.chi2()
+    #print(f"Chi2 from Data fit: {chi2_Data:.2f}")
+    #d["chi2_Data"] = chi2_Data
     
     ### Plot the result
     c2 = TCanvas("c2", "c2", 800, 600)
     frame2 = massvar.frame(RooFit.Name("Full fit"), RooFit.Title(""),
-                           RooFit.Bins(100))
+                           RooFit.Binning(num_bins))
 
-    data.plotOn(frame2, RooFit.Binning(100))
+    data.plotOn(frame2, RooFit.Binning(num_bins))
 
-    frame2.Clone("frame 2")
+    #frame2.Clone("frame 2")
     #model.getComponents().Print("v")
 
     model.plotOn(frame2,
@@ -341,14 +441,47 @@ def fit_data(mcfilename, datafilename, track_type, samesign=False, output_dir=No
                  RooFit.LineColor(kBlue+2),
                  RooFit.LineStyle(kDashed))
 
+    paramData = model.getParameters(data)
+    for param in paramData:
+        print(f"{param.GetName()} (constant: {param.isConstant()})")
+    numParamData = sum(1 for p in paramData if not p.isConstant())
+    print(f"Number of free parameters: {numParamData}")
+    chi2_data = frame2.chiSquare(numParamData)
+    print(f"Chi2/NDF (Data) = {chi2_data:.2f}")
+    d["chi2_ndf_Data"] = chi2_data
+
+    yaxis = frame2.GetYaxis()
+    yaxis.SetNoExponent(False)
+    yaxis.SetMaxDigits(3)
+    #yaxis.SetTitleOffset(1.4)   
+
     frame2.Draw()
 
+    maxi=frame2.GetMaximum()
+    
+
+    line = TLine(Pi0_mass, 0, Pi0_mass, maxi * 1.2)
+    line.SetLineColor(kGreen + 2)
+    line.SetLineWidth(2)
+    line.SetLineStyle(2)
+    line.Draw()
+
+    # Leyenda
+    #leg = TLegend(0.65, 0.75, 0.90, 0.88)  # Ajusta según espacio disponible
+    #leg.SetTextSize(0.05)
+    #leg.AddEntry(line, "PDG m(#pi^0)", "l")
+    #leg.Draw()
+
+
     ### Add a legend
-    leg = TLegend(0.71, 0.35, 0.91, 0.53)
+    leg = TLegend(0.68, 0.35, 0.88, 0.53)
     leg.SetTextSize(0.055)
     leg.AddEntry(frame2.findObject("model"), "Total", "l")
     leg.AddEntry(frame2.findObject("sigmodel"), "#pi^{0}", "l")
     leg.AddEntry(frame2.findObject("bkgmodel"), "Background", "l")
+    lum = luminosity
+    lum_unc = luminosity_uncertainty
+    leg.AddEntry(0, f"#scale[0.8]{{L = {lum} fb^{{-1}}}}", "")
     leg.Draw()
 
     maxi2=frame2.GetMaximum()
@@ -356,6 +489,7 @@ def fit_data(mcfilename, datafilename, track_type, samesign=False, output_dir=No
 
     frame2.SetXTitle("m(e^{+}e^{-}#gamma) [MeV/c^{2}]")
     frame2.SetYTitle(f"Candidates / ({bin_width:.1f} MeV/c^{{2}})")
+    
 
     lhcbName2 = TPaveText(gStyle.GetPadLeftMargin() + 0.03,
                          0.87 - gStyle.GetPadTopMargin(),
@@ -377,6 +511,10 @@ def fit_data(mcfilename, datafilename, track_type, samesign=False, output_dir=No
     if output_dir: 
         figurename = os.path.join(output_dir, figurename)
     c2.SaveAs(figurename)
+
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    c2.SaveAs(f"tests/DataFit_{fd_tag}_{timestamp}.pdf")
+
     print("Save figure : ", figurename)
     c2.Close()
     
@@ -385,23 +523,37 @@ def fit_data(mcfilename, datafilename, track_type, samesign=False, output_dir=No
     print(" Nsig = ", nsig.getVal(), "+-", nsig.getError())
     print(" Nbkg = ", nbkg.getVal(), "+-", nbkg.getError())
     print(" mean = ", mean.getVal(), "+-", mean.getError())
-    print(" sigma = ", sigma.getVal(), "+-", sigma.getError())
+    #print(" sigma = ", sigma.getVal(), "+-", sigma.getError())
 
     ### Save result from above in a dictionnary
+
     d["Nsig"] = nsig.getVal()
     d["Nsig_unc"] = nsig.getError()
+    d["Luminosity"] = lum
+    d["Luminosity_unc"] = lum_unc
+    d["Nsig/L"] = nsig.getVal()/lum
+    d["Nsig/L_unc"] = float((nsig.getVal()/lum)*np.sqrt((nsig.getError()/nsig.getVal())**2 + (lum_unc/lum)**2))
     # ToDo: add other fit variable values
     d["mean"] =mean.getVal()
     d["mean_unc"] = mean.getError()
     d["sigma"] =sigma.getVal()
     d["sigma_unc"] = sigma.getError()
-    d["mA"] = mA.getVal()
-    d["mA_unc"] = mA.getError()
-    d["mB"] = mB.getVal()
-    d["mB_unc"] = mB.getError()
+    #d["mA"] = mA.getVal()
+    #d["mA_unc"] = mA.getError()
+    #d["mB"] = mB.getVal()
+    #d["mB_unc"] = mB.getError()
     d["Nbkg"] = nbkg.getVal()
     d["Nbkg_unc"] = nbkg.getError()
+    d["Nbkg/L"] = nsig.getVal()/lum
+    d["Nbkg/L_unc"] = float((nbkg.getVal()/lum)*np.sqrt((nbkg.getError()/nbkg.getVal())**2 + (lum_unc/lum)**2))
     d["DataFit_status"] = result.status()
+    d["ch0"] = ch0.getVal()
+    d["ch0_unc"] = ch0.getError()
+    d["ch1"] = ch1.getVal()
+    d["ch1_unc"] = ch1.getError()
+    #d["ch2"] = ch2.getVal()
+    #d["ch2_unc"] = ch2.getError()
+    
 
     
     # Save result dictionnary into a yaml file
@@ -411,6 +563,15 @@ def fit_data(mcfilename, datafilename, track_type, samesign=False, output_dir=No
     with open(yfile, 'w') as outfile:
         yaml.dump(d, outfile, default_flow_style=False)
         print("\nSaved yml file in: ", yfile)
+
+
+    if not os.path.exists("tests"):
+        os.makedirs("tests")
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    yfile_test = os.path.join("tests", f"FitResults_{timestamp}.yml")
+    with open(yfile_test, 'w') as test_outfile:
+        yaml.dump(d, test_outfile, default_flow_style=False)
+        print("Also saved yml file in: ", yfile_test)
     
     return True
 
@@ -448,20 +609,35 @@ if __name__ == "__main__":
             if not os.path.exists(block_dir):
                 os.mkdir(block_dir)
 
-        print("\n>> Get selection for data file")
-        datasel = get_selection(selstring, fd_tag, "", fillnbr= fillnbr_selection, data_year=data_year)
 
-        print("Combine files in one data sample")
-        datafilename = setup_files(data_type="Data", track_type=track_type,
-                                sel=datasel, samesign=samesign, filenbr=filenbr,
-                                data_name = data_string, data_polarity = data_polarity, data_year = data_year, output_dir=block_dir)
-        print(datafilename)
-        
-        print("\n>> Start fitting")
-        fit_ok = fit_data(mcfilename=mcfilename, datafilename=datafilename,
-                    track_type=track_type, samesign=samesign,output_dir=block_dir)
+        expected_file = os.path.join(block_dir, "DataFit_{fd_tag}.pdf")  
 
-        print(f">> BLOCK {dataBlock} DONE")
+        if not os.path.exists(expected_file):
+            
+            print("\n>> Get selection for data file")
+            datasel = get_selection(selstring, fd_tag, "", fillnbr= fillnbr_selection, data_year=data_year)
+
+            print("Combine files in one data sample")
+            datafilename = setup_files(data_type="Data", track_type=track_type,
+                                    sel=datasel, samesign=samesign, filenbr=filenbr,
+                                    data_name = data_string, data_polarity = data_polarity, data_year = data_year, output_dir=block_dir)
+            print(datafilename)
+            
+            print("\n>> Start fitting")
+            fit_ok = fit_data(mcfilename=mcfilename, datafilename=datafilename,
+                        track_type=track_type, samesign=samesign,output_dir=block_dir)
+
+            print(f">> BLOCK {dataBlock} DONE")
+
+        else:
+            datafilename = expected_file
+            print(datafilename)
+            print("\n>> Start fitting")
+            fit_ok = fit_data(mcfilename=mcfilename, datafilename=datafilename,
+                        track_type=track_type, samesign=samesign,output_dir=block_dir)
+
+            print(f">> BLOCK {dataBlock} DONE")
+
 
 
     print(">> DONE")

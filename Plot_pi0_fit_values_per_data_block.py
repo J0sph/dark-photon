@@ -78,7 +78,7 @@ def Plotting(observable, values, uncertainties, maxi, mini, dataBlock_list, theo
     if mean_uncertainty is not None:
         band = TBox(0, mean_line - mean_uncertainty, nbr, mean_line + mean_uncertainty)
         band.SetFillColorAlpha(kGreen -9, 1)  
-        band.SetFillStyle(1001)           
+        band.SetFillStyle(3004)           
         band.Draw("same")
         legend.AddEntry(band, f"\\pm {mean_uncertainty:.2f} MeV/c^{{2}}", "f")
 
@@ -181,11 +181,13 @@ if __name__ == '__main__':
         
         if observable == "mean":
             total_events = np.sum(events)
-            #mean_mass = np.sum((events / total_events) * values)
+            mean_mass = np.sum((events / total_events) * values)
             #std_error = np.sqrt(np.sum(events * (values - mean_mass)**2)/ total_events)
-            weights = 1/(np.array(uncertainties)**2)
-            mean_mass = np.sum(weights*values)/np.sum(weights)
-            error_mass = 1/np.sqrt(np.sum(weights))
+            #weights = 1/(np.array(uncertainties)**2)
+            #mean_mass = np.sum(weights*values)/np.sum(weights)
+            #error_mass = 1/np.sqrt(np.sum(weights))
+            error_mass = 1/np.sqrt(np.sum(events/total_events))
+
             Plotting(observable, values, uncertainties, maxi, mini, data_periods, theory_line=Pi0_mass, mean_line=mean_mass, mean_uncertainty=error_mass, LHCblabel="LHCb_data")
 
         elif observable == "sigma":
