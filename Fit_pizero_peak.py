@@ -69,7 +69,7 @@ def get_selection(sel, fd_tag, string, fillnbr = None, data_year = None):
     selTopo = "em_QOVERP>-0.3 && ep_QOVERP<0.3 && ep_CHI2_DOF<2 && em_CHI2_DOF<2"
 
     selList = []
-    if fillnbr != None:
+    if fillnbr != None:s
         selList.append(fillnbr)
     
     if "truM" in sel:
@@ -247,6 +247,14 @@ def fit_data(mcfilename, datafilename, track_type, samesign=False, output_dir=No
    
     sigmodel = RooCrystalBall("sigmodel", "sigmodel", massvar, mean, sigma, a, n, False)
 
+
+    #mean2  = RooRealVar("mean2", "mean2", 540, 500, 600)  
+    #sigma2 = RooRealVar("sigma2", "sigma2", 15.0, 5, 30)
+    #a2 = RooRealVar("alpha2", "alpha2", -1.0, -5, 0)
+    #n2     = RooRealVar("n2", "n2", 1.5, 0.1, 5)
+
+    #sigmodel2 = RooCrystalBall("sigmodel2", "sigmodel2", massvar, mean2, sigma2, a2, n2)
+    
     # Fit options we can think about later
     #mean_constr = RooGaussian("mean_constr", "mean_constr", mean,
     #                             RooFit.RooConst(135), RooFit.RooConst(5))
