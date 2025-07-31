@@ -16,7 +16,7 @@
 ################# IMPORT ############################################       
 import os, sys
 import argparse
-from ROOT import  TLine, RooBernstein, RooBukinPdf, RooNovosibirsk, RooChebychev, RDataFrame, RDF, TLegend, TCanvas, TFile, TChain, RooRealVar, RooArgList, RooArgSet, RooGaussian, RooCBShape, RooLinkedList, RooArgusBG, RooAddPdf, RooFit, RooDataSet, RooCrystalBall, RooGenericPdf, gROOT, EnableImplicitMT, kRed, kGreen, kViolet, kBlue, kDashed, TPaveText, gStyle
+from ROOT import TLatex, TLine, RooBernstein, RooBukinPdf, RooNovosibirsk, RooChebychev, RDataFrame, RDF, TLegend, TCanvas, TFile, TChain, RooRealVar, RooArgList, RooArgSet, RooGaussian, RooCBShape, RooLinkedList, RooArgusBG, RooAddPdf, RooFit, RooDataSet, RooCrystalBall, RooGenericPdf, gROOT, EnableImplicitMT, kRed, kGreen, kViolet, kBlue, kDashed, TPaveText, gStyle
 import pickle
 import yaml
 from datetime import datetime
@@ -33,15 +33,15 @@ print("--> LHCbStyle loaded")
 ################# SETTING #########################################
 
 
-dataBlock_dict = {4: ["data_24c2a_magdown_qee", "magdown", "2024", "FillNumber >= 9808 && FillNumber <= 9910" ],
-                  3 : ["data_24c2a_magup_qee", "magup", "2024", "FillNumber >= 9911 && FillNumber <= 9943" ],
-                  2 : ["data_24c2a_magup_qee", "magup", "2024", "FillNumber >= 9945 && FillNumber <= 9978" ],
-                  1 : ["data_24c2a_magup_qee", "magup", "2024", "FillNumber >= 9982 && FillNumber <= 10056" ],
-                  5 : ["data_24c3a_magup_qee", "magup", "2024", "FillNumber >= 10059 && FillNumber <= 10102"],
-                  6: ["data_24c3a_magdown_qee", "magdown", "2024", "FillNumber >= 10104 && FillNumber <= 10190" ],
-                  7: ["data_24c4a_magdown_qee", "magdown", "2024", "FillNumber >= 10197 && FillNumber <= 10213" ],
+dataBlock_dict = {#4: ["data_24c2a_magdown_qee", "magdown", "2024", "FillNumber >= 9808 && FillNumber <= 9910" ],
+                  #3 : ["data_24c2a_magup_qee", "magup", "2024", "FillNumber >= 9911 && FillNumber <= 9943" ],
+                  #2 : ["data_24c2a_magup_qee", "magup", "2024", "FillNumber >= 9945 && FillNumber <= 9978" ],
+                  #1 : ["data_24c2a_magup_qee", "magup", "2024", "FillNumber >= 9982 && FillNumber <= 10056" ],
+                  #5 : ["data_24c3a_magup_qee", "magup", "2024", "FillNumber >= 10059 && FillNumber <= 10102"],
+                  #6: ["data_24c3a_magdown_qee", "magdown", "2024", "FillNumber >= 10104 && FillNumber <= 10190" ],
+                  #7: ["data_24c4a_magdown_qee", "magdown", "2024", "FillNumber >= 10197 && FillNumber <= 10213" ],
                   8 : ["data_24c4a_magup_qee", "magup", "2024", "FillNumber >= 10214 && FillNumber <= 10232" ],
-                  9: ["data_25c1_magdown_qee", "magdown", "2025", "FillNumber >= 10489 && FillNumber <= 10732" ]
+                  #9: ["data_25c1_magdown_qee", "magdown", "2025", "FillNumber >= 10489 && FillNumber <= 10732" ]
 }       
 
 
@@ -54,7 +54,7 @@ if samesign == True:
     
 mcfile = "Dalitz" # 3-body decay of pi0, as in SM. 
 selstring = "hlt1_BremOverlap_Ecal_PID_Kin_Rho_Topo"
-filenbr = -1
+filenumber = 1
 
 ################# SELECTION #########################################       
 
@@ -131,19 +131,35 @@ def get_pfns(data_type, data_name=None, data_polarity=None, data_year=None):
                         datatype=data_year, filetype="qee_funtuple.root",
                         name=data_name)
     
-    return datasets(polarity="magup", eventtype="39122948",
-                    version="v1r2683",
-                    datatype="2024", filetype="funtuple_qee.root",
-                    name="mcblock12_magup_pi0_dalitz_turbo_ftuple")
+    if data_type == "MC_pi0":
+        return datasets(polarity="magup", eventtype="39122948",
+                        version="v1r2683",
+                        datatype="2024", filetype="funtuple_qee.root",
+                        name="mcblock12_magup_pi0_dalitz_turbo_ftuple")
+
+    if data_type == "MC_eta":
+        return datasets(polarity="magup", eventtype="39122432",
+                        version="v1r2683",
+                        datatype="2024", filetype="funtuple_qee.root",
+                        name="mcblock12_magup_eta_dalitz_turbo_ftuple")
 
 def setup_files(data_type, track_type, sel="", samesign=False, filenbr=1,
 data_name = None, data_polarity = None, data_year = None, output_dir = None):
 
-
+    #def get_min_max(tree, branch_name):
+    #    values = []
+    #    for entry in tree:
+    #        val = getattr(entry, branch_name, None)
+    #        if val is not None:
+    #            values.append(val)
+    #    if values:
+    #        return min(values), max(values)
+    #    else:
+    #        return None, None
     
     ofilename = f"{data_type}_{track_type}"+"_SS"*samesign+".root"
 
-    if output_dir and data_type == "Data" :
+    if output_dir:
         ofilename = os.path.join(output_dir, ofilename)
 
     if os.path.exists(ofilename):
@@ -152,8 +168,8 @@ data_name = None, data_polarity = None, data_year = None, output_dir = None):
 
     print(f"Merging files into {ofilename}")
     ifilenames = get_pfns(data_type=data_type, data_name= data_name, data_polarity=data_polarity, data_year=data_year)
-    if data_type == "Data" and not samesign:
-        ifilenames = ifilenames[:2]
+    #if data_type == "Data" and not samesign:
+        #ifilenames = ifilenames[:2]
     if data_year == "2025":
         treename = "Rho_Tuple_NoIP"
     else:
@@ -166,14 +182,32 @@ data_name = None, data_polarity = None, data_year = None, output_dir = None):
     for ifilename in ifilenames:
         if filenbr==-1:
             chain.Add(ifilename)
+            print(ifilename)
         elif i<filenbr:
             chain.Add(ifilename)
+            print(ifilename)
         else:
             break
         i += 1
         
     ofile = TFile(ofilename, "recreate")
+
+    #if chain.GetEntries() > 0:
+    #    chain.SetBranchStatus("*", 0)
+    #    chain.SetBranchStatus("FillNumber", 1)
+    #    min_before, max_before = get_min_max(chain, "FillNumber")
+    #    print(f"Before selection: fillnumber[{min_before}, {max_before}]")
+    #    chain.SetBranchStatus("*", 1)
+
     otree = chain.CopyTree(sel)
+
+    #if otree.GetEntries() > 0:
+    #    otree.SetBranchStatus("*", 0)
+    #    otree.SetBranchStatus("FillNumber", 1)
+    #    min_after, max_after = get_min_max(otree, "FillNumber")
+    #    print(f"After selection: fillnumber[{min_after}, {max_after}]")
+    #    otree.SetBranchStatus("*", 1)
+    
     otree.SetName("DecayTree")
     print(f"Merger done, output {data_type} TTree has {otree.GetEntries()} entries")
     otree.Write()
@@ -188,7 +222,7 @@ def fit_data(mcfilename, datafilename, track_type, samesign=False, output_dir=No
     mcfile = TFile(mcfilename)
     mctree = mcfile.Get(mctreename)
 
-    massvar = RooRealVar("rho_M", "rho_M", 50, 400) #50, 400 #70,400/500
+    massvar = RooRealVar("rho_M", "rho_M", 50, 600) #50, 400 #70,400/500
     listvars = RooArgSet(massvar)
 
     mcdata = RooDataSet("mcdata", "mcdata", listvars, RooFit.Import(mctree))
@@ -235,12 +269,6 @@ def fit_data(mcfilename, datafilename, track_type, samesign=False, output_dir=No
 
     # Definir modelo de señal con Bukin
     #sigmodel = RooBukinPdf("sigmodel", "sigmodel", massvar, mean, sigma, xi, rhoL, rhoR)
-
-
-
-
-
-
 
     ### Create the fit of the model to the mc
     print("\n> Fit MC sample")
@@ -386,12 +414,24 @@ def fit_data(mcfilename, datafilename, track_type, samesign=False, output_dir=No
     #mB = RooRealVar("B", "B", 1e-6, 1e-2)
     #bkgmodel = RooGenericPdf("bkgmodel", "bkgmodel", q2_expr, RooArgList(massvar, mA, mB))
 
-    ch0 = RooRealVar("ch0", "ch0", 0.8, -100.0, 100.0)
-    ch1 = RooRealVar("ch1", "ch1", 0.8, -100.0, 100.0)
-    #ch2 = RooRealVar("ch2", "ch2", 0.8, -100.0, 100.0)
+    ch0 = RooRealVar("ch0", "ch0", 0.73)
+    ch1 = RooRealVar("ch1", "ch1", -0.29)
+    ch2 = RooRealVar("ch2", "ch2", 0.02)
+    ch3 = RooRealVar("ch3", "ch3", -0.01)
+    ch4 = RooRealVar("ch4", "ch4", -0.06)
+    ch5 = RooRealVar("ch5", "ch5", -0.03)
+    ch6 = RooRealVar("ch6", "ch6", -0.04)
+
+    ch0.setConstant(False)
+    ch1.setConstant(False)
+    ch2.setConstant(False)
+    ch3.setConstant(False)
+    ch4.setConstant(False)
+    ch5.setConstant(False)
+    ch6.setConstant(False)
     
 
-    bkgmodel = RooChebychev("bkgmodel", "bkgmodel", massvar, RooArgList(ch0, ch1))
+    bkgmodel = RooChebychev("bkgmodel", "bkgmodel", massvar, RooArgList(ch0,ch1,ch2,ch3,ch4,ch5,ch6))
 
     #bkgmodel = RooBernstein("bkgmodel", "bkgmodel", massvar, RooArgList(ch0, ch1, ch2))
 
@@ -402,8 +442,16 @@ def fit_data(mcfilename, datafilename, track_type, samesign=False, output_dir=No
                       RooArgSet(nsig, nbkg))
 
     ### Fit the model to the data
+
+    
+    massvar.setBins(100)  
+    binnedData = data.binnedClone()
+
     print("\n> Fit data sample")
-    result = model.fitTo(data, RooFit.Save(True), RooFit.Verbose(False),
+
+
+
+    result = model.fitTo(binnedData, RooFit.Save(True), RooFit.Verbose(False),
                          RooFit.Extended(True))
     #RooFit.ExternalConstraints(rt.RooArgSet(mean_constr)))
 
@@ -481,7 +529,12 @@ def fit_data(mcfilename, datafilename, track_type, samesign=False, output_dir=No
     leg.AddEntry(frame2.findObject("bkgmodel"), "Background", "l")
     lum = luminosity
     lum_unc = luminosity_uncertainty
-    leg.AddEntry(0, f"#scale[0.8]{{L = {lum} fb^{{-1}}}}", "")
+
+    latex = TLatex()
+    latex.SetNDC()
+    latex.SetTextSize(0.06) 
+    latex.DrawLatex(0.68, 0.30, f"#scale[0.8]{{#it{{L}} = {lum:.1f}\\,fb^{{-1}}}}")
+
     leg.Draw()
 
     maxi2=frame2.GetMaximum()
@@ -551,8 +604,20 @@ def fit_data(mcfilename, datafilename, track_type, samesign=False, output_dir=No
     d["ch0_unc"] = ch0.getError()
     d["ch1"] = ch1.getVal()
     d["ch1_unc"] = ch1.getError()
-    #d["ch2"] = ch2.getVal()
-    #d["ch2_unc"] = ch2.getError()
+    d["ch2"] = ch2.getVal()
+    d["ch2_unc"] = ch2.getError()
+    d["ch3"] = ch3.getVal()
+    d["ch3_unc"] = ch3.getError()
+    d["ch4"] = ch4.getVal()
+    d["ch4_unc"] = ch4.getError()
+    d["ch5"] = ch5.getVal()
+    d["ch5_unc"] = ch5.getError()
+    d["ch6"] = ch6.getVal()
+    d["ch6_unc"] = ch6.getError()
+    
+    
+    
+    
     
 
     
@@ -580,16 +645,24 @@ def fit_data(mcfilename, datafilename, track_type, samesign=False, output_dir=No
     
 
 if __name__ == "__main__":
+
+    dir_MC = "/eos/lhcb/user/c/castillj/DarkPhoton-samples/MC"
+    if not os.path.exists(dir_MC):
+        os.makedirs(dir_MC)
+
     print(">> START")
 
     print("\n>> Get selection for MC file")
     mcsel = get_selection("truM_"+selstring, fd_tag, mcfile)
 
     print("Combine files in one MC sample")
-    mcfilename = setup_files(data_type="MC", track_type=track_type,
-                             sel=mcsel, samesign=samesign, filenbr=1)
+    mcfilename = setup_files(data_type="MC_pi0", track_type=track_type,
+                             sel=mcsel, samesign=samesign, filenbr=filenumber, output_dir=dir_MC)
+    mcfilename2 = setup_files(data_type="MC_eta", track_type=track_type,
+                             sel=mcsel, samesign=samesign, filenbr=filenumber, output_dir=dir_MC)
 
     print(mcfilename)
+    print(mcfilename2)
 
 
     for dataBlock in dataBlock_dict.keys():
@@ -597,20 +670,25 @@ if __name__ == "__main__":
         data_string, data_polarity, data_year, fillnbr_selection  = dataBlock_dict[dataBlock]
         print(f"name: {data_string}, polarity: {data_polarity}, year: {data_year}, fill number: {fillnbr_selection}")
 
-        block_dir = f"block_{dataBlock}"
+        if filenumber == -1:
+            block_dir_data = f"/eos/lhcb/user/c/castillj/DarkPhoton-samples/block_{dataBlock}"
+        else:
+            block_dir_data = f"block_{dataBlock}"
 
-        expected_files = [f"{block_dir}/DataFit_{fd_tag}.pdf",
-                        f"{block_dir}/FitResults.yml"]
+        block_dir_fit = f"block_{dataBlock}"
 
-        if os.path.exists(block_dir) and all(os.path.exists(f) for f in expected_files):
+        expected_files = [f"{block_dir_fit}/DataFit_{fd_tag}.pdf",
+                        f"{block_dir_fit}/FitResults.yml"]
+
+        if os.path.exists(block_dir_fit) and all(os.path.exists(f) for f in expected_files):
             print(f">> Skipping block {dataBlock}: already processed.")
             continue
         else:
-            if not os.path.exists(block_dir):
-                os.mkdir(block_dir)
+            if not os.path.exists(block_dir_fit):
+                os.mkdir(block_dir_fit)
 
 
-        expected_file = os.path.join(block_dir, "DataFit_{fd_tag}.pdf")  
+        expected_file = os.path.join(block_dir_data, f"Data_{fd_tag}"+"_SS"*samesign+".root")  
 
         if not os.path.exists(expected_file):
             
@@ -619,13 +697,13 @@ if __name__ == "__main__":
 
             print("Combine files in one data sample")
             datafilename = setup_files(data_type="Data", track_type=track_type,
-                                    sel=datasel, samesign=samesign, filenbr=filenbr,
-                                    data_name = data_string, data_polarity = data_polarity, data_year = data_year, output_dir=block_dir)
+                                    sel=datasel, samesign=samesign, filenbr=filenumber,
+                                    data_name = data_string, data_polarity = data_polarity, data_year = data_year, output_dir=block_dir_data)
             print(datafilename)
             
             print("\n>> Start fitting")
             fit_ok = fit_data(mcfilename=mcfilename, datafilename=datafilename,
-                        track_type=track_type, samesign=samesign,output_dir=block_dir)
+                        track_type=track_type, samesign=samesign,output_dir=block_dir_fit)
 
             print(f">> BLOCK {dataBlock} DONE")
 
@@ -634,7 +712,7 @@ if __name__ == "__main__":
             print(datafilename)
             print("\n>> Start fitting")
             fit_ok = fit_data(mcfilename=mcfilename, datafilename=datafilename,
-                        track_type=track_type, samesign=samesign,output_dir=block_dir)
+                        track_type=track_type, samesign=samesign,output_dir=block_dir_fit)
 
             print(f">> BLOCK {dataBlock} DONE")
 
