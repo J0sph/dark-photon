@@ -32,7 +32,7 @@ args = parser.parse_args()
 import string
 root_file_range = args.range.lower()  # 'a', 'b', ...
 range_index = string.ascii_lowercase.index(root_file_range)
-block_size = 40
+block_size = 100
 start_file = range_index * block_size
 end_file = start_file + block_size
 #start_file = 0
@@ -44,8 +44,8 @@ end_file = start_file + block_size
 dataBlock_dict = {#4: ["data_24c2a_magdown_qee", "magdown", "2024", "FillNumber >= 9808 && FillNumber <= 9910" ],
                   #3 : ["data_24c2a_magup_qee", "magup", "2024", "FillNumber >= 9911 && FillNumber <= 9943" ],
                   #2 : ["data_24c2a_magup_qee", "magup", "2024", "FillNumber >= 9945 && FillNumber <= 9978" ],
-                  #1 : ["data_24c2a_magup_qee", "magup", "2024", "FillNumber >= 9982 && FillNumber <= 10056" ],
-                  5 : ["data_24c3a_magup_qee", "magup", "2024", "FillNumber >= 10059 && FillNumber <= 10102"],
+                  1 : ["data_24c2a_magup_qee", "magup", "2024", "FillNumber >= 9982 && FillNumber <= 10056" ],
+                  #5 : ["data_24c3a_magup_qee", "magup", "2024", "FillNumber >= 10059 && FillNumber <= 10102"],
                   #6: ["data_24c3a_magdown_qee", "magdown", "2024", "FillNumber >= 10104 && FillNumber <= 10190" ],
                   #7: ["data_24c4a_magdown_qee", "magdown", "2024", "FillNumber >= 10197 && FillNumber <= 10213" ],
                   #8 : ["data_24c4a_magup_qee", "magup", "2024", "FillNumber >= 10214 && FillNumber <= 10232" ],
