@@ -29,9 +29,10 @@ def get_dict(ymlpath):
     print("FitResult dictionnary opened from : "+ymlpath)
     return d
 
-def Plotting(observable, values, uncertainties, maxi, mini, dataBlock_list, theory_line=None, mean_line=None, mean_uncertainty=None, LHCblabel=""):
+def Plotting(observable, values, uncertainties, maxi, mini, dataBlock_list, theory_line=None, mean_line=None, mean_uncertainty=None, mc_mean_line=None, mc_mean_uncertainty=None,LHCblabel=""):
     nbr = len(values)
 
+    
     c = TCanvas('c', 'c', 600, 450)
     #c.SetLeftMargin(0.15)   
     c.SetBottomMargin(0.18) 
@@ -50,18 +51,20 @@ def Plotting(observable, values, uncertainties, maxi, mini, dataBlock_list, theo
         h.GetXaxis().SetBinLabel(iBin+1, label)
 
 
-    h.SetMaximum( maxi + (maxi-mini)*2 )
-    h.SetMinimum( mini - (maxi-mini)*1 )
+    h.SetMaximum( maxi + (maxi-mini)*3.5 )
+    h.SetMinimum( mini - (maxi-mini)*4.5 )
 
     h.GetXaxis().SetTitle("Data blocks")
     h.GetXaxis().SetTitleOffset(0.7)
     h.GetXaxis().SetLabelSize(1.5*0.04)
     #h.GetXaxis().SetLabelOffset(0.010)
     
-    if observable == "mean" or observable == "sigma":
-        y_title = f"{observable} (MeV/c^{{2}})"
+    if observable == "mean_pi0":
+        y_title = f"mean (MeV/c^{{2}})"
+    elif observable == "sigma_pi0":
+        y_title = f"#sigma (MeV/c^{{2}})"
     else:
-        y_title = observable  
+        y_title = "Nsig/L" 
 
     h.GetYaxis().SetTitle(y_title)
     h.GetYaxis().SetTitleOffset(1)
@@ -70,25 +73,43 @@ def Plotting(observable, values, uncertainties, maxi, mini, dataBlock_list, theo
     h.Draw()
 
     #TLegend(x1, y1, x2, y2)
-    legend = TLegend(0.40, 0.20, 0.80, 0.40) 
+    legend = TLegend(0.40, 0.20, 0.80, 0.45) 
     legend.SetBorderSize(0)
     legend.SetFillStyle(0)
     legend.SetTextSize(0.055) 
 
     if mean_uncertainty is not None:
         band = TBox(0, mean_line - mean_uncertainty, nbr, mean_line + mean_uncertainty)
-        band.SetFillColorAlpha(kGreen -9, 1)  
+        band.SetLineWidth(0)
+        band.SetLineColor(0)
+        band.SetFillColorAlpha(kViolet -9, 1)  
         band.SetFillStyle(3004)           
         band.Draw("same")
         legend.AddEntry(band, f"\\pm {mean_uncertainty:.2f} MeV/c^{{2}}", "f")
 
     if mean_line is not None:
         line_mean = TLine(0, mean_line, nbr, mean_line)
-        line_mean.SetLineColor(kGreen + 2)
+        line_mean.SetLineColor(kViolet + 2)
         line_mean.SetLineStyle(1)  
         line_mean.SetLineWidth(2)
         line_mean.Draw("same")
         legend.AddEntry(line_mean, f"Mean = {mean_line:.2f} MeV/c^{{2}}", "l")
+
+    if mc_mean_line is not None and mc_mean_uncertainty is not None:
+        band_mc = TBox(0, mc_mean_line - mc_mean_uncertainty, nbr, mc_mean_line + mc_mean_uncertainty)
+        band.SetLineWidth(0)
+        band.SetLineColor(0)
+        band_mc.SetFillColorAlpha(kBlue - 9, 1) 
+        band_mc.SetFillStyle(3004)
+        band_mc.Draw("same")
+
+    if mc_mean_line is not None:
+        line_mc = TLine(0, mc_mean_line, nbr, mc_mean_line)
+        line_mc.SetLineColor(kBlue + 2)
+        line_mc.SetLineStyle(1)
+        line_mc.SetLineWidth(2)
+        line_mc.Draw("same")
+        legend.AddEntry(line_mc, f"MC value = {mc_mean_line:.2f} MeV/c^{{2}}", "l")
      
     if theory_line is not None:
         line = TLine(0, theory_line, nbr, theory_line)
@@ -104,7 +125,7 @@ def Plotting(observable, values, uncertainties, maxi, mini, dataBlock_list, theo
     graph.Draw("P")
  
 
-    if observable == "mean" or observable == "sigma": 
+    if observable == "mean_pi0" or observable == "sigma_pi0": 
         legend.AddEntry(graph, "Data", "lep")
         if theory_line is not None:
             legend.AddEntry(line, f"PDG m(#pi^{{0}}) = {theory_line:.2f} MeV/c^{{2}}", "l")
@@ -133,7 +154,9 @@ def Plotting(observable, values, uncertainties, maxi, mini, dataBlock_list, theo
 
     if not os.path.exists("DataBlockSummary"):
         os.mkdir("DataBlockSummary")
-    c.SaveAs(f"DataBlockSummary/{observable}.pdf")
+    safe_observable = observable.replace("/", "_")
+    c.SaveAs(f"DataBlockSummary/{safe_observable}.pdf")
+    c.SaveAs(f"DataBlockSummary/{safe_observable}.png")
     c.Close()
     return 0
     
@@ -157,9 +180,14 @@ if __name__ == '__main__':
         datablocks.append(datablock)
 
     Pi0_mass = 134.9768  # MeV/c^2
+    mc_mean_mass = 125.17506536842525  # MeV/c^2       
+    mc_mean_mass_uncertainty = 0.6910122949753443  # MeV/c^2  
+
+    mc_mean_sigma = 18.218177476445344 # MeV/c^2       
+    mc_mean_sigma_uncertainty = 0.550285207110738  # MeV/c^2    
 
 
-    for observable in ["mean", "sigma", "Nsig"]:
+    for observable in ["mean_pi0", "sigma_pi0", "Nsig_pi0/L"]:
         print("\nGet values of observable:", observable)
         values, uncertainties, events = [], [], []
         for i in range(len(ymlfiles)):
@@ -168,7 +196,7 @@ if __name__ == '__main__':
 
             fitval = fitvaldict[f"{observable}"]
             fitunc = fitvaldict[f"{observable}_unc"]
-            event =  fitvaldict["Nsig"]
+            event =  fitvaldict["Nsig_pi0"]
             
             values.append(fitval)
             uncertainties.append(fitunc)
@@ -179,25 +207,25 @@ if __name__ == '__main__':
         maxi = max(values)
         mini = min(values)
         
-        if observable == "mean":
+        if observable == "mean_pi0":
             total_events = np.sum(events)
             mean_mass = np.sum((events / total_events) * values)
-            #std_error = np.sqrt(np.sum(events * (values - mean_mass)**2)/ total_events)
+            std_error_mass = np.sqrt(np.sum(events * (values - mean_mass)**2)/ total_events)
             #weights = 1/(np.array(uncertainties)**2)
             #mean_mass = np.sum(weights*values)/np.sum(weights)
             #error_mass = 1/np.sqrt(np.sum(weights))
-            error_mass = 1/np.sqrt(np.sum(events/total_events))
+            #error_mass = 1/np.sqrt(np.sum(events/total_events))
 
-            Plotting(observable, values, uncertainties, maxi, mini, data_periods, theory_line=Pi0_mass, mean_line=mean_mass, mean_uncertainty=error_mass, LHCblabel="LHCb_data")
+            Plotting(observable, values, uncertainties, maxi, mini, data_periods, theory_line=Pi0_mass, mean_line=mean_mass, mean_uncertainty=std_error_mass, mc_mean_line=mc_mean_mass, mc_mean_uncertainty=mc_mean_mass_uncertainty, LHCblabel="LHCb_data")
 
-        elif observable == "sigma":
+        elif observable == "sigma_pi0":
             total_events = np.sum(events)
-            #mean_sigma = np.sum((events / total_events) * values)
-            #std_error_sigma = np.sqrt(np.sum(events * (values - mean_sigma)**2)/ total_events)
-            weights = 1/(np.array(uncertainties)**2)
-            mean_sigma = np.sum(weights*values)/np.sum(weights)
-            error_sigma = 1/np.sqrt(np.sum(weights))
-            Plotting(observable, values, uncertainties, maxi, mini, data_periods, mean_line=mean_sigma, mean_uncertainty=error_sigma, LHCblabel="LHCb_data")
+            mean_sigma = np.sum((events / total_events) * values)
+            std_error_sigma = np.sqrt(np.sum(events * (values - mean_sigma)**2)/ total_events)
+            #weights = 1/(np.array(uncertainties)**2)
+            #mean_sigma = np.sum(weights*values)/np.sum(weights)
+            #error_sigma = 1/np.sqrt(np.sum(weights))
+            Plotting(observable, values, uncertainties, maxi, mini, data_periods, mean_line=mean_sigma, mean_uncertainty=std_error_sigma,mc_mean_line=mc_mean_sigma, mc_mean_uncertainty=mc_mean_sigma_uncertainty, LHCblabel="LHCb_data")
             
         else:
             Plotting(observable, values, uncertainties, maxi, mini, data_periods, LHCblabel="LHCb_data")
