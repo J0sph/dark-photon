@@ -209,7 +209,7 @@ def fit_data(mcfilenames, datafilename, track_type, samesign=False, output_dir=N
     mcfile_eta = TFile(mcfilenames[1])
     mctree_eta = mcfile_eta.Get(mctreename)
 
-    massvar = RooRealVar("rho_M", "rho_M", 50, 400) 
+    massvar = RooRealVar("rho_M", "rho_M", 50, 600) 
 
 
     listvars = RooArgSet(massvar)
