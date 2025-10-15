@@ -16,7 +16,7 @@
 ################# IMPORT ############################################       
 import os, sys
 import argparse
-from ROOT import TLatex, TLine, RooBernstein, RooBukinPdf, RooNovosibirsk, RooChebychev, RDataFrame, RDF, TLegend, TCanvas, TFile, TChain, RooRealVar, RooArgList, RooArgSet, RooGaussian, RooCBShape, RooLinkedList, RooArgusBG, RooAddPdf, RooFit, RooDataSet, RooCrystalBall, RooGenericPdf, gROOT, EnableImplicitMT,kOrange, kRed, kGreen, kViolet, kBlue, kDashed, TPaveText, gStyle
+from ROOT import TLatex, TLine, RooBernstein, RooFormulaVar, RooBukinPdf, RooNovosibirsk, RooChebychev, RDataFrame, RDF, TLegend, TCanvas, TFile, TChain, RooRealVar, RooArgList, RooArgSet, RooGaussian, RooCBShape, RooLinkedList, RooArgusBG, RooAddPdf, RooFit, RooDataSet, RooCrystalBall, RooGenericPdf, gROOT, EnableImplicitMT,kOrange, kRed, kGreen, kViolet, kBlue, kDashed, TPaveText, gStyle
 import pickle
 import yaml
 from datetime import datetime
@@ -62,7 +62,7 @@ filenumber = -1
 ################# SELECTION #########################################       
 
 
-def get_selection(sel, fd_tag, string, fillnbr = None, data_year = None):
+def get_selection(sel, fd_tag, string, fillnbr = None, data_year = None, brew_category=None):
     print("Get selection for", fd_tag, " : ", sel)
     selBremOverlap = "!(em_HASBREMADDED==1 && gamma_CaloNeutralID==em_BREMHYPOID ) && !(ep_HASBREMADDED==1 && gamma_CaloNeutralID==ep_BREMHYPOID)"
     selEcal = "!(gamma_CaloNeutralCol > 22 && gamma_CaloNeutralCol < 41 && gamma_CaloNeutralRow > 24 && gamma_CaloNeutralRow < 39)"
@@ -117,6 +117,9 @@ def get_selection(sel, fd_tag, string, fillnbr = None, data_year = None):
     if "Topo" in sel:
         selList.append(selTopo)
 
+    if brew_category:
+        selList.append(f"(em_HASBREMADDED + ep_HASBREMADDED) == {brew_category}")
+
     selString = ' && '.join(selList)
     print(f"selString: {selString}")
     return selString
@@ -148,17 +151,6 @@ def get_pfns(data_type, data_name=None, data_polarity=None, data_year=None):
 
 def setup_files(data_type, track_type, sel="", samesign=False, filenbr=1,
 data_name = None, data_polarity = None, data_year = None, output_dir = None):
-
-    #def get_min_max(tree, branch_name):
-    #    values = []
-    #    for entry in tree:
-    #        val = getattr(entry, branch_name, None)
-    #        if val is not None:
-    #            values.append(val)
-    #    if values:
-    #        return min(values), max(values)
-    #    else:
-    #        return None, None
     
     ofilename = f"{data_type}_{track_type}"+"_SS"*samesign+".root"
 
@@ -197,21 +189,7 @@ data_name = None, data_polarity = None, data_year = None, output_dir = None):
         
     ofile = TFile(ofilename, "recreate")
 
-    #if chain.GetEntries() > 0:
-    #    chain.SetBranchStatus("*", 0)
-    #    chain.SetBranchStatus("FillNumber", 1)
-    #    min_before, max_before = get_min_max(chain, "FillNumber")
-    #    print(f"Before selection: fillnumber[{min_before}, {max_before}]")
-    #    chain.SetBranchStatus("*", 1)
-
     otree = chain.CopyTree(sel)
-
-    #if otree.GetEntries() > 0:
-    #    otree.SetBranchStatus("*", 0)
-    #    otree.SetBranchStatus("FillNumber", 1)
-    #    min_after, max_after = get_min_max(otree, "FillNumber")
-    #    print(f"After selection: fillnumber[{min_after}, {max_after}]")
-    #    otree.SetBranchStatus("*", 1)
     
     otree.SetName("DecayTree")
     print(f"Merger done, output {data_type} TTree has {otree.GetEntries()} entries")
@@ -231,93 +209,47 @@ def fit_data(mcfilenames, datafilename, track_type, samesign=False, output_dir=N
     mcfile_eta = TFile(mcfilenames[1])
     mctree_eta = mcfile_eta.Get(mctreename)
 
-    massvar = RooRealVar("rho_M", "rho_M", 50, 600) 
+    massvar = RooRealVar("rho_M", "rho_M", 50, 400) 
+
+
     listvars = RooArgSet(massvar)
+    
 
     mcdata_pi0 = RooDataSet("mcdata_pi0", "mcdata_pi0", listvars, RooFit.Import(mctree_pi0))
     print("MC data has", mcdata_pi0.sumEntries(), "entries")
 
     mcdata_eta = RooDataSet("mcdata_eta", "mcdata_eta", listvars, RooFit.Import(mctree_eta))
-    print("MC data has", mcdata_eta.sumEntries(), "entries")
-    
-    ### Create the fit model
-    #a1 = RooRealVar("a1", "a1", 1.06, 1, 2)
-    #a2 = RooRealVar("a2", "a2", 1.63, 1, 2)
-    #n1 = RooRealVar("n1", "n1", 143.92, 140, 150)
-    #n2 = RooRealVar("n2", "n2", 0.86, 0.1, 1)
+    print("MC data has", mcdata_eta.sumEntries(), "entries") 
 
     a1_pi0 = RooRealVar("a1_pi0", "a1_pi0", 1.5, 0.5, 5.0)
-    n1_pi0 = RooRealVar("n1_pi0", "n1_pi0", 2.0, 1.0, 30.0)
+    n1_pi0 = RooRealVar("n1_pi0", "n1_pi0", 29, 0, 30)
     a2_pi0 = RooRealVar("a2_pi0", "a2_pi0", 1.5, 0.5, 5.0)
-    n2_pi0 = RooRealVar("n2_pi0", "n2_pi0", 2.0, 1.0, 30.0)
-
-    a1_pi0.setConstant(False)
-    a2_pi0.setConstant(False)
-    n1_pi0.setConstant(False)
-    n2_pi0.setConstant(False)
-
-    #mean = RooRealVar("mean", "mean", 130, 120, 155)
-
-    #sigma = RooRealVar("sigma", "sigma", 15.38, 2, 20)
-
-
-    #a_pi0 = RooRealVar("a_pi0", "a_pi0", -1.60, -2, 2)
-    #n_pi0  = RooRealVar("n_pi0", "n_pi0", 1.12, 0.1, 2) 
+    n2_pi0 = RooRealVar("n2_pi0", "n2_pi0", 2.0, 0.01, 30.0)
     sigma_pi0 = RooRealVar("sigma_pi0", "sigma_pi0", 18.22, 2, 20)
-    mean_pi0  = RooRealVar("mean_pi0", "mean_pi0", 130, 120, 140)
+    mean_pi0  = RooRealVar("mean_pi0", "mean_pi0", 130, 120, 140) 
 
-    #mean_pi0  = RooRealVar("mean_pi0", "Mean of pi0", 135, 130, 140)
-    #sigma_pi0 = RooRealVar("sigma_pi0", "Width of pi0", 7, 2, 15)
-    #alpha     = RooRealVar("alpha", "Tail parameter", 1.5, 0.5, 5.0)
-    #n         = RooRealVar("n", "Tail exponent", 3.0, 1.0, 20.0)
+    sigmodel_pi0 = RooCrystalBall("sigmodel_pi0", "sigmodel_pi0", massvar, mean_pi0, sigma_pi0, a1_pi0, n1_pi0, a2_pi0, n2_pi0)
 
-    #sigmodel_pi0 = RooCBShape("sigmodel_pi0",massvar, mean_pi0, sigma_pi0, alpha, n)
-
-    sigmodel_pi0 = RooCrystalBall("sigmodel", "sigmodel", massvar, mean_pi0, sigma_pi0, a1_pi0, n1_pi0, a2_pi0, n2_pi0)
-   
-    #sigmodel_pi0 = RooCrystalBall("sigmodel_pi0", "sigmodel_pi0", massvar, mean_pi0, sigma_pi0, a_pi0, n_pi0, False)
-
-
-    #mean_eta  = RooRealVar("mean_eta", "mean_eta", 547, 530, 560)    
-    #sigma_eta = RooRealVar("sigma_eta", "sigma_eta", 12, 5, 30)      
-    #a_eta     = RooRealVar("a_eta", "a_eta", 1.5, 0.5, 5)            
-    #n_eta     = RooRealVar("n_eta", "n_eta", 2.0, 1.0, 20)   
-
-    #sigmodel_eta = RooCrystalBall("sigmodel_eta", "sigmodel_eta", massvar, mean_eta, sigma_eta, a_eta, n_eta, False)
-
-    mean_eta  = RooRealVar("mean_eta", "mean_eta", 547, 530, 560)  
+    mean_eta  = RooRealVar("mean_eta", "mean_eta", 550, 530, 600)  
     sigma_eta = RooRealVar("sigma_eta", "sigma_eta", 12, 5, 50)    
     a1_eta    = RooRealVar("a1_eta", "a1_eta", 1.5, 0.1, 5)        
-    n1_eta    = RooRealVar("n1_eta", "n1_eta", 2.0, 0.5, 20)       
+    n1_eta    = RooRealVar("n1_eta", "n1_eta", 2.0, 0.5, 100)       
     a2_eta    = RooRealVar("a2_eta", "a2_eta", 2.0, 0.5, 5)        
-    n2_eta    = RooRealVar("n2_eta", "n2_eta", 5.0, 0.5, 20)       
-
+    n2_eta    = RooRealVar("n2_eta", "n2_eta", 5.0, 0.5, 20)   
+   
     sigmodel_eta = RooCrystalBall("sigmodel_eta", "sigmodel_eta", massvar, mean_eta, sigma_eta, a1_eta, n1_eta, a2_eta, n2_eta )
-
-
-    
+ 
     # Fit options we can think about later
     #mean_constr = RooGaussian("mean_constr", "mean_constr", mean,
     #                             RooFit.RooConst(135), RooFit.RooConst(5))
 
 
+    #mean = RooRealVar("mean", "mean", 135, 120, 150)    
+    #sigma = RooRealVar("sigma", "sigma", 10, 0.1, 100)             
+    #tau = RooRealVar("tau", "tau", 1, -10.0, 10.0) 
 
-   #mean = RooRealVar("mean", "mean", 135, 120, 150)    
-   #sigma = RooRealVar("sigma", "sigma", 10, 0.1, 100)             
-   #tau = RooRealVar("tau", "tau", 1, -10.0, 10.0) 
+    #sigmodel = RooNovosibirsk("novosibirsk", "Novosibirsk Function", massvar, mean, sigma, tau)  
 
-   #sigmodel = RooNovosibirsk("novosibirsk", "Novosibirsk Function", massvar, mean, sigma, tau)  
-
-
-    # Parámetros del Bukin PDF
-    #mean = RooRealVar("mean", "mean", 130, 120, 155)         
-    #sigma = RooRealVar("sigma", "sigma", 15.38, 2, 20)                
-    #xi = RooRealVar("xi", "xi", -0.1, -2, 0)                
-    #rhoL = RooRealVar("rhoL", "rhoL", 0.1, 0.001, 1.0)          
-    #rhoR = RooRealVar("rhoR", "rhoR", 0.1, 0.001, 1.0)          
-
-    # Definir modelo de señal con Bukin
-    #sigmodel = RooBukinPdf("sigmodel", "sigmodel", massvar, mean, sigma, xi, rhoL, rhoR)
 
     ### Create the fit of the model to the mc
     print("\n> Fit MC sample")
@@ -337,31 +269,23 @@ def fit_data(mcfilenames, datafilename, track_type, samesign=False, output_dir=N
 
     ### Save result from above in a dictionnary
     d = {}
-    d["a1_pi0"] = a1_pi0.getVal()
-    d["a1_pi0_unc"] = a1_pi0.getError()
-    d["a2_pi0"] = a2_pi0.getVal()
-    d["a2_pi0_unc"] = a2_pi0.getError()
-    d["n1_pi0"] = n1_pi0.getVal()
-    d["n1_pi0_unc"] = n1_pi0.getError()
-    d["n2_pi0"] = n2_pi0.getVal()
-    d["n2_pi0_unc"] = n2_pi0.getError()
-    #d["a_pi0"]=a_pi0.getVal()
-    #d["a_pi0_unc"] = a_pi0.getError()
-    #d["n_pi0"]=n_pi0.getVal()
-    #d["n_pi0_unc"] = n_pi0.getError()
+    d["a1_MC_pi0"] = a1_pi0.getVal()
+    d["a1_MC_pi0_unc"] = a1_pi0.getError()
+    d["a2_MC_pi0"] = a2_pi0.getVal()
+    d["a2_MC_pi0_unc"] = a2_pi0.getError()
+    d["n1_MC_pi0"] = n1_pi0.getVal()
+    d["n1_MC_pi0_unc"] = n1_pi0.getError()
+    d["n2_MC_pi0"] = n2_pi0.getVal()
+    d["n2_MC_pi0_unc"] = n2_pi0.getError()
     d["MCfit_pi0_status"] = mcresult_pi0.status()
-    #d["a_eta"]=a_eta.getVal()
-    #d["a_eta_unc"] = a_eta.getError()
-    #d["n_eta"]=n_eta.getVal()
-    #d["n_eta_unc"] = n_eta.getError()
-    d["a1_eta"]=a1_eta.getVal()
-    d["a1_eta_unc"] = a1_eta.getError()
-    d["n1_eta"]=n1_eta.getVal()
-    d["n1_eta_unc"] = n1_eta.getError()
-    d["a2_eta"]=a2_eta.getVal()
-    d["a2_eta_unc"] = a2_eta.getError()
-    d["n2_eta"]=n2_eta.getVal()
-    d["n2_eta_unc"] = n2_eta.getError()
+    d["a1_MC_eta"]=a1_eta.getVal()
+    d["a1_MC_eta_unc"] = a1_eta.getError()
+    d["n1_MC_eta"]=n1_eta.getVal()
+    d["n1_MC_eta_unc"] = n1_eta.getError()
+    d["a2_MC_eta"]=a2_eta.getVal()
+    d["a2_MC_eta_unc"] = a2_eta.getError()
+    d["n2_MC_eta"]=n2_eta.getVal()
+    d["n2_MC_eta_unc"] = n2_eta.getError()
     d["MCfit_eta_status"] = mcresult_eta.status()
     d["mean_MC_pi0"] = mean_pi0.getVal()
     d["mean_MC_pi0_unc"] = mean_pi0.getError()
@@ -371,17 +295,7 @@ def fit_data(mcfilenames, datafilename, track_type, samesign=False, output_dir=N
     d["mean_MC_eta_unc"] = mean_eta.getError()
     d["sigma_MC_eta"] = sigma_eta.getVal()
     d["sigma_MC_eta_unc"] = sigma_eta.getError()
-    #d["chi2_MC"] = chi2_MC
-    #d["Tau"] = tau.getVal()
-    #d["Tau_unc"] = tau.getError()
-    #d["xi"] = xi.getVal()
-    #d["xi_unc"] = xi.getError()
-    #d["rhoL"] = rhoL.getVal()
-    #d["rhoL_unc"] = rhoL.getError()
-    #d["rhoR"] = rhoR.getVal()
-    #d["rhoR_unc"] = rhoR.getError()
-
-    
+ 
     ### Plotting
     #gROOT.ProcessLine(".x lhcbStyle.C")
     #print("--> LHCbStyle loaded")
@@ -543,59 +457,62 @@ def fit_data(mcfilenames, datafilename, track_type, samesign=False, output_dir=N
     #for var in [a1, n1, a2, n2]:
     for var in [a1_pi0, n1_pi0, a2_pi0, n2_pi0, a1_eta, n1_eta, a2_eta, n2_eta]:
     #for var in [xi,rhoL,rhoR]:
-        var.setConstant(True)
+        var.setConstant(False)
         var.Print()
+   
 
      
     #m0 = RooRealVar("m0", "m0", 1000, 581, 10000)
     #c  = RooRealVar("c", "c", -20, -100, -1)
-
     #bkgmodel = RooArgusBG("bkgmodel", "bkgmodel", massvar, m0, c)
 
+
     #q2_expr = "TMath:Sqrt( (rho_M*rho_M - (mA + mB)*(mA + mB)) * (rho_M*rho_M - (f- mB)*(mA - mB)) ) / (2*rho_M)"
-
-
     #q2_expr = "(rho_M-50)**A * exp(-B*(rho_M-50))"
     #mA = RooRealVar("A", "A", 0.5, 1e-3, 75)
     #mB = RooRealVar("B", "B", 1e-6, 1e-2)
     #bkgmodel = RooGenericPdf("bkgmodel", "bkgmodel", q2_expr, RooArgList(massvar, mA, mB))
 
-    ch0 = RooRealVar("ch0", "ch0", 0.6)#, -2.0, 2.0)
-    ch1 = RooRealVar("ch1", "ch1", -0.3)#, -2, 2)
-    ch2 = RooRealVar("ch2", "ch2", 0.02)#, -2.0, 2.0)
-    ch3 = RooRealVar("ch3", "ch3", 0.01)#, -0.9, 0.9)
-    #ch4 = RooRealVar("ch4", "ch4", 0, -0.06, 0.06)
-    #ch5 = RooRealVar("ch5", "ch5", 0, -0.03, 0.03)
-    #ch6 = RooRealVar("ch6", "ch6", 0, -0.02, 0.02)
-
-    #ch0 = RooRealVar("ch0", "ch0", 1.1503, 0.5,1.5)#, -0.1, 1)
-    #ch1 = RooRealVar("ch1", "ch1", -0, -0.1, 0.1)#, 0, 0)
-    #ch2 = RooRealVar("ch2", "ch2", -0.1446, -0.5, -0.08)#, -10, 0)
-    #ch3 = RooRealVar("ch3", "ch3",  0.0486, -1,1)#, -10, 0)
-
-    #ch0 = RooRealVar("ch0", "ch0", 0.1, -1.0, 1.0)
-    #ch1 = RooRealVar("ch1", "ch1", 0.1, -1.0, 1.0)
-    #ch2 = RooRealVar("ch2", "ch2", 0.1, -1.0, 1.0)
-    #ch3 = RooRealVar("ch3", "ch3", 0.0, -0.5, 0.5)
-
-    #ch0 = RooRealVar("ch0", "ch0", 0.2, 0.0, 0.5)
-    #ch1 = RooRealVar("ch1", "ch1", -0.2, -0.5, 0.5)
-    #ch2 = RooRealVar("ch2", "ch2", 0.1, -0.5, 0.5)
-    #ch3 = RooRealVar("ch3", "ch3", 0.05, -0.2, 0.2)
-    #ch4 = RooRealVar("ch4", "ch4", -0.02, -0.05, 0.05)
-    #ch5 = RooRealVar("ch5", "ch5", 0.01, -0.02, 0.02)
-    #ch6 = RooRealVar("ch6", "ch6", 0.0, -0.01, 0.01)
    
+    #ch0 = RooRealVar("ch0", "ch0", 0.751191741710717, 0.5, 0.9)
+    #ch1 = RooRealVar("ch1", "ch1", -0.35691311920190966, -0.5, -0.1)
+    #ch2 = RooRealVar("ch2", "ch2", 0.0049958121811287904, 0.001, 0.005)
+    #ch3 = RooRealVar("ch3", "ch3", 0.060527392457907926, 0.04, 0.09)
+    #ch4 = RooRealVar("ch4", "ch4", -0.05251852686173577, -0.08, -0.02)
+
+    #ch0 = RooRealVar("ch0", "ch0", 0.7525440472321306, 0.75, 0.753)
+    #ch1 = RooRealVar("ch1", "ch1", -0.3558356978417028, -0.36, -0.35)
+    #ch2 = RooRealVar("ch2", "ch2", 0.004296718425100122, 0.0040, 0.005)
+    #ch3 = RooRealVar("ch3", "ch3", 0.06000170413087846, 0.0600, 0.0610)
+    #ch4 = RooRealVar("ch4", "ch4", -0.05273207149794215, -0.053, -0.052)
+
+
+    #ch0 = RooRealVar("ch0", "ch0",  0.7711694296866772)
+    #ch1 = RooRealVar("ch1", "ch1", -0.33352209944666444)
+    #ch2 = RooRealVar("ch2", "ch2", 0.01111889040916377)
+    #ch3 = RooRealVar("ch3", "ch3", 0.0474602837772222)
+    #ch4 = RooRealVar("ch4", "ch4", -0.07318425045367961)
+    #ch5 = RooRealVar("ch5", "ch5", -0.002736062704096411)
+
+
+
+
+    ch0 = RooRealVar("ch0","ch0", 0.7434911687971489,  0.74, 0.75)
+    ch1 = RooRealVar("ch1","ch1", -0.3205845207842097, -0.33, -0.32)
+    ch2 = RooRealVar("ch2","ch2", 0.015866619377069718, 0.015, 0.016)
+    ch3 = RooRealVar("ch3","ch3", 0.037254298471043404, 0.037, 0.038)
+    ch4 = RooRealVar("ch4","ch4",-0.04589722568446994, -0.046, -0.045)
+
     ch0.setConstant(False)
     ch1.setConstant(False)
     ch2.setConstant(False)
     ch3.setConstant(False)
-    #ch4.setConstant(False)
-    #ch5.setConstant(False)
-    #ch6.setConstant(False)
-    
+    ch4.setConstant(False)
 
-    bkgmodel = RooChebychev("bkgmodel", "bkgmodel", massvar, RooArgList(ch0,ch1,ch2,ch3))
+
+    bkgmodel = RooChebychev("bkgmodel", "bkgmodel", massvar, RooArgList(ch0,ch1,ch2,ch3,ch4))
+
+    bkg_positive = RooGenericPdf("bkg_positive", "pow(@0, 2)", RooArgList(bkgmodel))
 
     #bkgmodel = RooBernstein("bkgmodel", "Bernstein background", massvar, RooArgList(ch0, ch1, ch2, ch3))
 
@@ -608,11 +525,209 @@ def fit_data(mcfilenames, datafilename, track_type, samesign=False, output_dir=N
 
     ### Fit the model to the data
 
-    
     massvar.setBins(100)  
     binnedData = data.binnedClone()
 
     print("\n> Fit data sample")
+
+    #massvar.setRange("sideband_low", 50, 490)
+    
+
+    #bkgmodel.fitTo(data, RooFit.Range("sideband_low"))
+
+    mean_pi0.setRange(130, 131)
+    mean_pi0.setVal(130.650240664456)
+    mean_pi0.setConstant(False)
+
+    sigma_pi0.setRange(15, 16)
+    sigma_pi0.setVal(15.365004872083228)
+    sigma_pi0.setConstant(False)
+
+    mean_eta.setRange(554, 555)
+    mean_eta.setVal(554.1517079855686)
+    mean_eta.setConstant(False)
+
+    sigma_eta.setRange(17, 18)
+    sigma_eta.setVal(17.17650651317862)
+    sigma_eta.setConstant(False)
+
+    nsig_pi0.setRange(2380000, 2390000)
+    nsig_pi0.setVal(2386659.681494587)
+    nsig_pi0.setConstant(False)
+
+
+    nsig_eta.setRange(478000, 479000)
+    nsig_eta.setVal(478760.6042866103)
+    nsig_eta.setConstant(False)
+
+    nbkg.setRange(21800000, 21900000)
+    nbkg.setVal(21810309.161668904)
+    nbkg.setConstant(False)
+
+    a1_pi0.setRange(1.0, 2.0)
+    a1_pi0.setVal(1.2607008259193968)
+    a1_pi0.setConstant(True)
+
+    a2_pi0.setRange(1.0, 2.0)
+    a2_pi0.setVal(1.4348632550705949)
+    a2_pi0.setConstant(True)
+
+    n1_pi0.setRange(140, 150)
+    n1_pi0.setVal(148.17958343873667)
+    n1_pi0.setConstant(True)
+
+    n2_pi0.setRange(0.1, 1.0)
+    n2_pi0.setVal(0.9369535265475946)
+    n2_pi0.setConstant(True)
+
+
+    a1_eta.setRange(0.1, 1.0)
+    a1_eta.setVal(0.49567005180653423)
+    a1_eta.setConstant(True)
+
+    a2_eta.setRange(0.5, 1.0)
+    a2_eta.setVal(0.6357319533251446)
+    a2_eta.setConstant(True)
+
+    n1_eta.setRange(90.0, 150.0)
+    n1_eta.setVal(124.01896103245652)
+    n1_eta.setConstant(True)
+
+    n2_eta.setRange(1.0, 20.0)
+    n2_eta.setVal(14.141213236032844)
+    n2_eta.setConstant(True)
+
+   
+    print("***mean_pi0 value before InitialDataFit plot:", mean_pi0.getVal())
+
+    ### Plot the result
+    c3 = TCanvas("c3", "c3", 800, 600)
+    frame3 = massvar.frame(RooFit.Name("Full fit"), RooFit.Title(""),
+                           RooFit.Bins(num_bins))
+
+    data.plotOn(frame3, RooFit.Binning(num_bins))
+
+    #frame2.Clone("frame 2")
+    model.getComponents().Print("v")
+
+    print("**mean_pi0 value before InitialDataFit plot:", mean_pi0.getVal())
+
+
+    model.plotOn(frame3,
+                 RooFit.Name("model"),
+                 RooFit.LineColor(kViolet+4))
+
+    
+    model.plotOn(frame3, 
+                 RooFit.Components("sigmodel_pi0"),
+                 RooFit.Name("sigmodel_pi0"),
+                 RooFit.LineColor(kRed+2),
+                 RooFit.LineStyle(kDashed))
+
+    model.plotOn(frame3, 
+                 RooFit.Components("sigmodel_eta"),
+                 RooFit.Name("sigmodel_eta"),
+                 RooFit.LineColor(kOrange+7),
+                 RooFit.LineStyle(kDashed))
+
+    model.plotOn(frame3,
+                 RooFit.Components("bkgmodel"),
+                 RooFit.Name("bkgmodel"),
+                 RooFit.LineColor(kBlue+2),
+                 RooFit.LineStyle(kDashed))
+
+    paramData = model.getParameters(data)
+    for param in paramData:
+        print(f"{param.GetName()} (constant: {param.isConstant()})")
+    numParamData = sum(1 for p in paramData if not p.isConstant())
+    print(f"Number of free parameters: {numParamData}")
+    chi2_data = frame3.chiSquare(numParamData)
+    print(f"Chi2/NDF (Data) = {chi2_data:.2f}")
+    d["chi2_ndf_Data"] = chi2_data
+
+    yaxis = frame3.GetYaxis()
+    yaxis.SetNoExponent(False)
+    yaxis.SetMaxDigits(3)
+    #yaxis.SetTitleOffset(1.4)   
+
+    frame3.Draw()
+
+    maxi=frame3.GetMaximum()
+    
+    #line_pi0 = TLine(Pi0_mass, 0, Pi0_mass, maxi * 1.2)
+    #line_pi0.SetLineColor(kGreen + 2)
+    #line_pi0.SetLineWidth(2)
+    #line_pi0.SetLineStyle(2)
+    #line_pi0.Draw()
+
+    #line_eta = TLine(eta_mass, 0, eta_mass, maxi * 1.2)
+    #line_eta.SetLineColor(kGreen + 2)
+    #line_eta.SetLineWidth(2)
+    #line_eta.SetLineStyle(2)
+    #line_eta.Draw()
+
+    #leg = TLegend(0.65, 0.75, 0.90, 0.88)
+    #leg.SetTextSize(0.05)
+    #leg.AddEntry(line_pi0, "PDG m(#pi^{0})", "l")
+    #leg.AddEntry(line_eta, "PDG m(#eta)", "l")
+    #leg.Draw()
+
+
+
+    ### Add a legend
+    leg = TLegend(0.68, 0.35, 0.88, 0.63)
+    leg.SetFillColor(0)   
+    leg.SetFillStyle(0) 
+    leg.SetTextSize(0.055)
+    leg.AddEntry(frame3.findObject("model"), "Total", "l")
+    leg.AddEntry(frame3.findObject("sigmodel_pi0"), "#pi^{0}", "l")
+    leg.AddEntry(frame3.findObject("sigmodel_eta"), "#eta", "l")
+    leg.AddEntry(frame3.findObject("bkgmodel"), "Background", "l")
+    lum = luminosity
+    lum_unc = luminosity_uncertainty
+
+    latex = TLatex()
+    latex.SetNDC()
+    latex.SetTextSize(0.06) 
+    #latex.DrawLatex(0.68, 0.30, f"#scale[0.8]{{\\mathcal{L} = {lum:.1f}\\,fb^{{-1}}}}")
+    latex.DrawLatex(0.68, 0.30, f"#scale[0.8]{{#font[300]{{L}} = {lum:.1f} fb^{{-1}}}}")
+
+    leg.Draw()
+
+    maxi3=frame3.GetMaximum()
+    frame3.SetMaximum(maxi3*1.2) 
+
+    frame3.SetXTitle("m(e^{+}e^{-}#gamma) [MeV/c^{2}]")
+    frame3.SetYTitle(f"Candidates / ({bin_width:.1f} MeV/c^{{2}})")
+    
+
+    lhcbName2 = TPaveText(gStyle.GetPadLeftMargin() + 0.03,
+                         0.87 - gStyle.GetPadTopMargin(),
+                         gStyle.GetPadLeftMargin() + 0.38,
+                         0.95 - gStyle.GetPadTopMargin(),
+                         "BRNDC")
+    
+    lhcbName2.AddText("LHCb Preliminary")
+    
+    lhcbName2.SetFillColor(0)
+    lhcbName2.SetFillStyle(0)
+    lhcbName2.SetTextAlign(12)
+    lhcbName2.SetTextSize(0.06)
+    lhcbName2.SetBorderSize(0)
+    lhcbName2.Draw()
+    
+    c3.Update()
+    figurename = f"InitialDataFit_{fd_tag}.pdf"
+    if output_dir: 
+        figurename = os.path.join(output_dir, figurename)
+    c3.SaveAs(figurename)
+
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    c3.SaveAs(f"tests/InitialDataFit_{fd_tag}_{timestamp}.pdf")
+   
+
+    print("Save figure : ", figurename)
+    c3.Close()
 
 
 
@@ -644,8 +759,8 @@ def fit_data(mcfilenames, datafilename, track_type, samesign=False, output_dir=N
     model.plotOn(frame2, 
                  RooFit.Components("sigmodel_pi0"),
                  RooFit.Name("sigmodel_pi0"),
-                 RooFit.LineColor(kRed+1))#,
-                 #RooFit.LineStyle(kDashed))
+                 RooFit.LineColor(kRed+2),
+                 RooFit.LineStyle(kDashed))
 
     model.plotOn(frame2, 
                  RooFit.Components("sigmodel_eta"),
@@ -764,10 +879,11 @@ def fit_data(mcfilenames, datafilename, track_type, samesign=False, output_dir=N
 
     ### Save result from above in a dictionnary
 
+    d["sig/bkg_pi0"] = nsig_pi0.getVal()/nbkg.getVal()
     d["Nsig_pi0"] = nsig_pi0.getVal()
     d["Nsig_pi0_unc"] = nsig_pi0.getError()
-    #d["Nsig_eta"] = nsig_eta.getVal()
-    #d["Nsig_eta_unc"] = nsig_eta.getError()
+    d["Nsig_eta"] = nsig_eta.getVal()
+    d["Nsig_eta_unc"] = nsig_eta.getError()
     d["Luminosity"] = lum
     d["Luminosity_unc"] = lum_unc
     d["Nsig_pi0/L"] = nsig_pi0.getVal()/lum
@@ -783,6 +899,22 @@ def fit_data(mcfilenames, datafilename, track_type, samesign=False, output_dir=N
     d["mean_eta_unc"] = mean_eta.getError()
     d["sigma_eta"] =sigma_eta.getVal()
     d["sigma_eta_unc"] = sigma_eta.getError()
+    d["a1_pi0"] = a1_pi0.getVal()
+    d["a1_pi0_unc"] = a1_pi0.getError()
+    d["a2_pi0"] = a2_pi0.getVal()
+    d["a2_pi0_unc"] = a2_pi0.getError()
+    d["n1_pi0"] = n1_pi0.getVal()
+    d["n1_pi0_unc"] = n1_pi0.getError()
+    d["n2_pi0"] = n2_pi0.getVal()
+    d["n2_pi0_unc"] = n2_pi0.getError()
+    d["a1_eta"]=a1_eta.getVal()
+    d["a1_eta_unc"] = a1_eta.getError()
+    d["n1_eta"]=n1_eta.getVal()
+    d["n1_eta_unc"] = n1_eta.getError()
+    d["a2_eta"]=a2_eta.getVal()
+    d["a2_eta_unc"] = a2_eta.getError()
+    d["n2_eta"]=n2_eta.getVal()
+    d["n2_eta_unc"] = n2_eta.getError()
     #d["mA"] = mA.getVal()
     #d["mA_unc"] = mA.getError()
     #d["mB"] = mB.getVal()
@@ -800,18 +932,12 @@ def fit_data(mcfilenames, datafilename, track_type, samesign=False, output_dir=N
     d["ch2_unc"] = ch2.getError()
     d["ch3"] = ch3.getVal()
     d["ch3_unc"] = ch3.getError()
-    #d["ch4"] = ch4.getVal()
-    #d["ch4_unc"] = ch4.getError()
+    d["ch4"] = ch4.getVal()
+    d["ch4_unc"] = ch4.getError()
     #d["ch5"] = ch5.getVal()
     #d["ch5_unc"] = ch5.getError()
     #d["ch6"] = ch6.getVal()
     #d["ch6_unc"] = ch6.getError()
-    
-    
-    
-    
-    
-
     
     # Save result dictionnary into a yaml file
     yfile = "FitResults.yml"
